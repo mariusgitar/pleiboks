@@ -39,7 +39,6 @@ async function fetchCoverImage(id) {
     const res = await fetch(`/api/metadata?id=${id}`);
     if (!res.ok) return null;
     const data = await res.json();
-    // Prøv ulike stier der NRK lagrer bilder
     const images =
       data?.preplay?.poster?.images ||
       data?.preplay?.images ||
@@ -47,10 +46,7 @@ async function fetchCoverImage(id) {
       data?.image;
     if (!images) return null;
     const arr = Array.isArray(images) ? images : [images];
-    // Velg største bilde
-    const sorted = arr
-      .filter((i) => i?.url)
-      .sort((a, b) => (b.width || 0) - (a.width || 0));
+    const sorted = arr.filter((i) => i?.url).sort((a, b) => (b.width || 0) - (a.width || 0));
     return sorted[0]?.url || null;
   } catch {
     return null;
@@ -62,9 +58,15 @@ function formatTime(s) {
   return `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, "0")}`;
 }
 
+// Hent coverbilder for alle episoder ved oppstart
+async function prefetchCovers(episodes) {
+  const results = await Promise.all(episodes.map((ep) => fetchCoverImage(ep.id)));
+  return Object.fromEntries(episodes.map((ep, i) => [ep.id, results[i]]));
+}
+
 export default function App() {
+  const [covers, setCovers] = useState({});
   const [active, setActive] = useState(null);
-  const [coverUrl, setCoverUrl] = useState(null);
   const [streamUrl, setStreamUrl] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
@@ -73,30 +75,24 @@ export default function App() {
   const [duration, setDuration] = useState(0);
   const audioRef = useRef(null);
 
+  // Last coverbilder ved oppstart
+  useEffect(() => {
+    prefetchCovers(EPISODES).then(setCovers);
+  }, []);
+
   async function velgEpisode(ep) {
-    // Stopp og nullstill gammel episode umiddelbart
     const audio = audioRef.current;
-    if (audio) {
-      audio.pause();
-      audio.src = "";
-    }
+    if (audio) { audio.pause(); audio.src = ""; }
     setPlaying(false);
     setStreamUrl(null);
     setProgress(0);
     setDuration(0);
     setError(null);
-    setCoverUrl(null);
     setActive(ep);
     setLoading(true);
-
     try {
-      // Hent manifest og coverbilde parallelt
-      const [url, cover] = await Promise.all([
-        fetchManifest(ep.id),
-        fetchCoverImage(ep.id),
-      ]);
+      const url = await fetchManifest(ep.id);
       setStreamUrl(url);
-      setCoverUrl(cover);
     } catch (e) {
       setError(`Klarte ikke laste: ${e.message}`);
     } finally {
@@ -104,17 +100,13 @@ export default function App() {
     }
   }
 
-  // Sett src og forsøk autoplay når streamUrl er klar
   useEffect(() => {
     const audio = audioRef.current;
     if (!audio || !streamUrl) return;
     audio.src = streamUrl;
-    audio.play()
-      .then(() => setPlaying(true))
-      .catch(() => setPlaying(false)); // Autoplay blokkert → bruker trykker play selv
+    audio.play().then(() => setPlaying(true)).catch(() => setPlaying(false));
   }, [streamUrl]);
 
-  // Lydhendelser
   useEffect(() => {
     const audio = audioRef.current;
     if (!audio) return;
@@ -134,12 +126,8 @@ export default function App() {
   function togglePlay() {
     const audio = audioRef.current;
     if (!audio || !streamUrl) return;
-    if (playing) {
-      audio.pause();
-      setPlaying(false);
-    } else {
-      audio.play().then(() => setPlaying(true));
-    }
+    if (playing) { audio.pause(); setPlaying(false); }
+    else audio.play().then(() => setPlaying(true));
   }
 
   function seek(e) {
@@ -150,84 +138,124 @@ export default function App() {
   }
 
   const pct = duration ? (progress / duration) * 100 : 0;
+  const accent = "#1B4D5C";
+  const yellow = "#F5C842";
 
   return (
     <div style={{
       minHeight: "100vh",
-      background: "linear-gradient(160deg, #0d1117 0%, #1a1f35 60%, #0d2137 100%)",
+      background: "#FDF6EC",
       display: "flex",
       flexDirection: "column",
       alignItems: "center",
-      padding: "32px 16px 48px",
-      fontFamily: "'Segoe UI', system-ui, sans-serif",
+      fontFamily: "'Nunito', 'Segoe UI', system-ui, sans-serif",
+      paddingBottom: 48,
     }}>
+      {/* Google Fonts */}
+      <style>{`@import url('https://fonts.googleapis.com/css2?family=Nunito:wght@700;800;900&display=swap');`}</style>
       <audio ref={audioRef} />
 
       {/* Header */}
-      <div style={{ textAlign: "center", marginBottom: 36 }}>
+      <div style={{
+        width: "100%",
+        background: accent,
+        padding: "28px 24px 20px",
+        marginBottom: 24,
+      }}>
+        <div style={{
+          fontSize: 13,
+          fontWeight: 800,
+          color: yellow,
+          letterSpacing: 2,
+          textTransform: "uppercase",
+          marginBottom: 4,
+        }}>NRK Super</div>
         <h1 style={{
           color: "#fff",
-          fontSize: 30,
+          fontSize: 32,
           fontWeight: 900,
           margin: 0,
-          letterSpacing: -0.5,
+          lineHeight: 1.1,
         }}>Hallo Bablo</h1>
-        <p style={{ color: "#64748b", margin: "6px 0 0", fontSize: 14 }}>
-          Velg en episode
-        </p>
+        <p style={{
+          color: "rgba(255,255,255,0.5)",
+          fontSize: 14,
+          margin: "6px 0 0",
+          fontWeight: 700,
+        }}>Velg en episode å høre på</p>
       </div>
 
       {/* Episodegrid */}
       <div style={{
         display: "grid",
         gridTemplateColumns: "1fr 1fr",
-        gap: 12,
+        gap: 14,
         width: "100%",
-        maxWidth: 460,
-        marginBottom: 32,
+        maxWidth: 480,
+        padding: "0 16px",
+        marginBottom: 28,
+        boxSizing: "border-box",
       }}>
         {EPISODES.map((ep) => {
           const isActive = active?.id === ep.id;
+          const cover = covers[ep.id];
           return (
             <button
               key={ep.id}
               onClick={() => velgEpisode(ep)}
               style={{
-                background: isActive
-                  ? "linear-gradient(135deg, #6d28d9 0%, #4338ca 100%)"
-                  : "rgba(255,255,255,0.05)",
-                border: isActive
-                  ? "2px solid #8b5cf6"
-                  : "2px solid rgba(255,255,255,0.08)",
-                borderRadius: 18,
-                padding: "20px 12px",
+                background: cover
+                  ? `url(${cover}) center/cover no-repeat`
+                  : "#e8ddd0",
+                border: isActive ? `3px solid ${yellow}` : "3px solid transparent",
+                borderRadius: 16,
+                padding: 0,
                 cursor: "pointer",
-                textAlign: "center",
-                color: "#fff",
-                transition: "all 0.15s ease",
+                aspectRatio: "1 / 1",
                 position: "relative",
                 overflow: "hidden",
+                boxShadow: isActive
+                  ? `0 8px 24px rgba(27,77,92,0.35)`
+                  : "0 2px 8px rgba(0,0,0,0.10)",
+                transform: isActive ? "scale(1.03)" : "scale(1)",
+                transition: "all 0.18s ease",
               }}
             >
-              {/* Spilleindikator */}
+              {/* Fallback emoji */}
+              {!cover && (
+                <span style={{
+                  position: "absolute", inset: 0,
+                  display: "flex", alignItems: "center", justifyContent: "center",
+                  fontSize: 48,
+                }}>{ep.emoji}</span>
+              )}
+
+              {/* Gradient overlay */}
+              <div style={{
+                position: "absolute", inset: 0,
+                background: "linear-gradient(to bottom, transparent 35%, rgba(0,0,0,0.72) 100%)",
+              }} />
+
+              {/* Spillindikator */}
               {isActive && playing && (
                 <div style={{
-                  position: "absolute",
-                  top: 10,
-                  right: 10,
-                  width: 8,
-                  height: 8,
-                  borderRadius: "50%",
-                  background: "#4ade80",
-                  boxShadow: "0 0 6px #4ade80",
+                  position: "absolute", top: 10, right: 10,
+                  width: 10, height: 10, borderRadius: "50%",
+                  background: yellow,
+                  boxShadow: `0 0 8px ${yellow}`,
                 }} />
               )}
-              <div style={{ fontSize: 40, marginBottom: 10 }}>{ep.emoji}</div>
+
+              {/* Tittel */}
               <div style={{
-                fontSize: 14,
-                fontWeight: 700,
+                position: "absolute",
+                bottom: 10, left: 10, right: 10,
+                color: "#fff",
+                fontWeight: 800,
+                fontSize: 13,
                 lineHeight: 1.3,
-                color: isActive ? "#fff" : "#cbd5e1",
+                textAlign: "left",
+                textShadow: "0 1px 3px rgba(0,0,0,0.6)",
               }}>
                 {ep.title}
               </div>
@@ -240,152 +268,119 @@ export default function App() {
       {active && (
         <div style={{
           width: "100%",
-          maxWidth: 460,
-          background: "rgba(255,255,255,0.04)",
-          borderRadius: 24,
-          border: "1px solid rgba(255,255,255,0.08)",
-          overflow: "hidden",
+          maxWidth: 480,
+          padding: "0 16px",
+          boxSizing: "border-box",
         }}>
-          {/* Coverbilde eller fargeflate */}
           <div style={{
-            width: "100%",
-            aspectRatio: "16/9",
-            background: coverUrl
-              ? `url(${coverUrl}) center/cover no-repeat`
-              : "linear-gradient(135deg, #1e1b4b, #312e81)",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            fontSize: 72,
-            position: "relative",
+            background: "#fff",
+            borderRadius: 20,
+            overflow: "hidden",
+            boxShadow: "0 4px 20px rgba(0,0,0,0.10)",
           }}>
-            {!coverUrl && <span>{active.emoji}</span>}
-
-            {/* Mørklegg litt for tekst-lesbarhet */}
+            {/* Episodenavn-stripe */}
             <div style={{
-              position: "absolute",
-              inset: 0,
-              background: "linear-gradient(to bottom, transparent 40%, rgba(0,0,0,0.7) 100%)",
-            }} />
-
-            {/* Tittel over bildet */}
-            <div style={{
-              position: "absolute",
-              bottom: 16,
-              left: 16,
-              right: 16,
-              color: "#fff",
-              fontWeight: 800,
-              fontSize: 20,
-              textShadow: "0 1px 4px rgba(0,0,0,0.8)",
+              background: accent,
+              padding: "14px 18px",
+              display: "flex",
+              alignItems: "center",
+              gap: 10,
             }}>
-              {active.title}
+              <div style={{
+                width: 36, height: 36, borderRadius: 8,
+                background: covers[active.id]
+                  ? `url(${covers[active.id]}) center/cover`
+                  : "#2a6070",
+                flexShrink: 0,
+                fontSize: 20,
+                display: "flex", alignItems: "center", justifyContent: "center",
+              }}>
+                {!covers[active.id] && active.emoji}
+              </div>
+              <div>
+                <div style={{ color: "rgba(255,255,255,0.55)", fontSize: 11, fontWeight: 800, textTransform: "uppercase", letterSpacing: 1 }}>Spiller nå</div>
+                <div style={{ color: "#fff", fontWeight: 800, fontSize: 15 }}>{active.title}</div>
+              </div>
             </div>
-          </div>
 
-          {/* Kontroller */}
-          <div style={{ padding: "20px 20px 24px" }}>
-            {loading && (
-              <div style={{
-                textAlign: "center",
-                color: "#8b5cf6",
-                padding: "12px 0",
-                fontSize: 15,
-              }}>
-                Laster episode…
-              </div>
-            )}
-
-            {error && (
-              <div style={{
-                textAlign: "center",
-                color: "#f87171",
-                fontSize: 13,
-                padding: "8px 0",
-              }}>
-                {error}
-              </div>
-            )}
-
-            {streamUrl && !loading && (
-              <>
-                {/* Fremdriftslinje */}
-                <div
-                  onClick={seek}
-                  style={{
-                    height: 6,
-                    background: "rgba(255,255,255,0.12)",
-                    borderRadius: 3,
-                    cursor: "pointer",
-                    marginBottom: 8,
-                    position: "relative",
-                  }}
-                >
-                  <div style={{
-                    position: "absolute",
-                    left: 0, top: 0, bottom: 0,
-                    width: `${pct}%`,
-                    background: "linear-gradient(90deg, #8b5cf6, #6366f1)",
-                    borderRadius: 3,
-                    transition: "width 0.4s linear",
-                  }} />
-                  {/* Dragnål */}
-                  <div style={{
-                    position: "absolute",
-                    top: "50%",
-                    left: `${pct}%`,
-                    transform: "translate(-50%, -50%)",
-                    width: 14,
-                    height: 14,
-                    borderRadius: "50%",
-                    background: "#a78bfa",
-                    boxShadow: "0 0 8px rgba(139,92,246,0.8)",
-                  }} />
+            {/* Kontroller */}
+            <div style={{ padding: "20px 18px 24px" }}>
+              {loading && (
+                <div style={{ textAlign: "center", color: accent, padding: "16px 0", fontWeight: 700 }}>
+                  Laster episode…
                 </div>
-
-                {/* Tider */}
-                <div style={{
-                  display: "flex",
-                  justifyContent: "space-between",
-                  color: "#475569",
-                  fontSize: 12,
-                  marginBottom: 24,
-                }}>
-                  <span>{formatTime(progress)}</span>
-                  <span>{formatTime(duration)}</span>
+              )}
+              {error && (
+                <div style={{ textAlign: "center", color: "#e53e3e", fontSize: 13, padding: "8px 0" }}>
+                  {error}
                 </div>
+              )}
 
-                {/* Play/pause */}
-                <div style={{ display: "flex", justifyContent: "center" }}>
-                  <button
-                    onClick={togglePlay}
+              {streamUrl && !loading && (
+                <>
+                  {/* Fremdriftslinje */}
+                  <div
+                    onClick={seek}
                     style={{
-                      width: 72,
-                      height: 72,
-                      borderRadius: "50%",
-                      background: playing
-                        ? "rgba(139,92,246,0.2)"
-                        : "linear-gradient(135deg, #7c3aed, #4f46e5)",
-                      border: playing
-                        ? "2px solid #8b5cf6"
-                        : "none",
+                      height: 8,
+                      background: "#EDE8E1",
+                      borderRadius: 4,
                       cursor: "pointer",
-                      fontSize: 28,
-                      display: "flex",
-                      alignItems: "center",
-                      justifyContent: "center",
-                      boxShadow: playing
-                        ? "none"
-                        : "0 0 28px rgba(124,58,237,0.5)",
-                      transition: "all 0.2s ease",
-                      color: "#fff",
+                      position: "relative",
+                      marginBottom: 8,
                     }}
                   >
-                    {playing ? "⏸" : "▶"}
-                  </button>
-                </div>
-              </>
-            )}
+                    <div style={{
+                      position: "absolute", left: 0, top: 0, bottom: 0,
+                      width: `${pct}%`,
+                      background: accent,
+                      borderRadius: 4,
+                      transition: "width 0.4s linear",
+                    }} />
+                    <div style={{
+                      position: "absolute",
+                      top: "50%", left: `${pct}%`,
+                      transform: "translate(-50%, -50%)",
+                      width: 16, height: 16, borderRadius: "50%",
+                      background: accent,
+                      border: "3px solid #fff",
+                      boxShadow: "0 1px 4px rgba(0,0,0,0.2)",
+                    }} />
+                  </div>
+
+                  {/* Tider */}
+                  <div style={{
+                    display: "flex", justifyContent: "space-between",
+                    color: "#a09888", fontSize: 12, fontWeight: 700,
+                    marginBottom: 20,
+                  }}>
+                    <span>{formatTime(progress)}</span>
+                    <span>{formatTime(duration)}</span>
+                  </div>
+
+                  {/* Play/pause */}
+                  <div style={{ display: "flex", justifyContent: "center" }}>
+                    <button
+                      onClick={togglePlay}
+                      style={{
+                        width: 68, height: 68, borderRadius: "50%",
+                        background: playing ? "#fff" : accent,
+                        border: playing ? `3px solid ${accent}` : "none",
+                        cursor: "pointer",
+                        fontSize: 26,
+                        display: "flex", alignItems: "center", justifyContent: "center",
+                        color: playing ? accent : "#fff",
+                        boxShadow: playing ? "none" : "0 4px 16px rgba(27,77,92,0.35)",
+                        transition: "all 0.18s ease",
+                        fontWeight: 900,
+                      }}
+                    >
+                      {playing ? "⏸" : "▶"}
+                    </button>
+                  </div>
+                </>
+              )}
+            </div>
           </div>
         </div>
       )}
