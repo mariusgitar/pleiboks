@@ -14,6 +14,9 @@ const TRACKS = [
   { id: "01zmwhYAqUx66RcPTgXuLF", uri: "spotify:track:01zmwhYAqUx66RcPTgXuLF", title: "Le Bare", artist: "Kutoppen & Sol Heilo", emoji: "😄" },
 ];
 
+const accent = "#1B4D5C";
+const yellow = "#F5C842";
+
 // ── API ───────────────────────────────────────────────────────────
 async function fetchNrkManifest(id) {
   const res = await fetch(`/api/manifest?id=${id}`);
@@ -81,8 +84,6 @@ function formatTime(s) {
 // ── Hent voksen ───────────────────────────────────────────────────
 function HentVoksenSkjerm({ onRetry }) {
   const [showGuide, setShowGuide] = useState(false);
-  const accent = "#1B4D5C";
-  const yellow = "#F5C842";
   return (
     <div style={{
       minHeight: "100vh", background: "#FDF6EC",
@@ -90,6 +91,7 @@ function HentVoksenSkjerm({ onRetry }) {
       alignItems: "center", justifyContent: "center",
       padding: "32px 24px", fontFamily: "'Nunito', system-ui, sans-serif", textAlign: "center",
     }}>
+      <style>{`@import url('https://fonts.googleapis.com/css2?family=Nunito:wght@700;800;900&display=swap');`}</style>
       <div style={{ fontSize: 80, marginBottom: 16 }}>🎵</div>
       <h2 style={{ fontSize: 28, fontWeight: 900, color: accent, margin: "0 0 12px" }}>Musikken er ikke klar!</h2>
       <p style={{ fontSize: 17, color: "#555", fontWeight: 700, margin: "0 0 32px", lineHeight: 1.5 }}>
@@ -130,7 +132,6 @@ function HentVoksenSkjerm({ onRetry }) {
 }
 
 function InnloggingSkjerm() {
-  const accent = "#1B4D5C";
   return (
     <div style={{
       minHeight: "100vh", background: "#FDF6EC",
@@ -138,8 +139,9 @@ function InnloggingSkjerm() {
       alignItems: "center", justifyContent: "center",
       padding: 32, fontFamily: "'Nunito', system-ui, sans-serif", textAlign: "center",
     }}>
+      <style>{`@import url('https://fonts.googleapis.com/css2?family=Nunito:wght@700;800;900&display=swap');`}</style>
       <div style={{ fontSize: 72, marginBottom: 16 }}>🔐</div>
-      <h2 style={{ fontWeight: 900, color: "#1B4D5C", fontSize: 24, margin: "0 0 10px" }}>Koble til Spotify</h2>
+      <h2 style={{ fontWeight: 900, color: accent, fontSize: 24, margin: "0 0 10px" }}>Koble til Spotify</h2>
       <p style={{ color: "#666", fontWeight: 700, marginBottom: 32, fontSize: 15 }}>
         Logg inn med Spotify én gang, så er alt klart for barnet.
       </p>
@@ -152,36 +154,31 @@ function InnloggingSkjerm() {
   );
 }
 
-// ── Galleri-kort: 3:4 ratio, emoji + tittel under bildet ─────────
+// ── Episodekort: 2x2, kvadratisk, cover fyller flaten ────────────
 function MediaCard({ title, emoji, cover, isActive, playing, onClick }) {
-  const yellow = "#F5C842";
-  const accent = "#1B4D5C";
   return (
-    <button
-      onClick={onClick}
-      style={{
-        background: "none", border: "none", padding: 0,
-        cursor: "pointer", textAlign: "left",
-        transform: isActive ? "scale(1.03)" : "scale(1)",
-        transition: "all 0.18s ease",
-      }}
-    >
-      {/* Bildeflate — 3:4 ratio, viser mer av bildet */}
+    <button onClick={onClick} style={{
+      background: "none", border: "none", padding: 0,
+      cursor: "pointer", textAlign: "left",
+      transform: isActive ? "scale(1.04)" : "scale(1)",
+      transition: "all 0.18s ease",
+    }}>
+      {/* Kvadratisk kortflate */}
       <div style={{
-        width: "100%",
-        aspectRatio: "3 / 4",
-        background: cover ? `url(${cover}) center/contain no-repeat #f0e8de` : "#e8ddd0",
-        borderRadius: 14,
+        width: "100%", aspectRatio: "1 / 1",
+        background: cover ? `url(${cover}) center/cover no-repeat` : "#e8ddd0",
+        borderRadius: 16,
         border: isActive ? `3px solid ${yellow}` : "3px solid transparent",
-        boxShadow: isActive ? "0 8px 24px rgba(27,77,92,0.3)" : "0 2px 8px rgba(0,0,0,0.08)",
-        position: "relative",
-        overflow: "hidden",
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
+        boxShadow: isActive ? "0 6px 20px rgba(27,77,92,0.3)" : "0 2px 8px rgba(0,0,0,0.08)",
+        position: "relative", overflow: "hidden",
+        display: "flex", alignItems: "center", justifyContent: "center",
       }}>
-        {!cover && <span style={{ fontSize: 52 }}>{emoji}</span>}
-
+        {!cover && <span style={{ fontSize: 44 }}>{emoji}</span>}
+        {/* Gradient for tittellesbarhet */}
+        <div style={{
+          position: "absolute", inset: 0,
+          background: "linear-gradient(to bottom, transparent 45%, rgba(0,0,0,0.65) 100%)",
+        }} />
         {/* Spilleindikator */}
         {isActive && playing && (
           <div style={{
@@ -190,174 +187,128 @@ function MediaCard({ title, emoji, cover, isActive, playing, onClick }) {
             background: yellow, boxShadow: `0 0 8px ${yellow}`,
           }} />
         )}
-      </div>
-
-      {/* Tittel under bildet med stor emoji */}
-      <div style={{ marginTop: 8, paddingLeft: 2 }}>
-        <div style={{ fontSize: 20, lineHeight: 1, marginBottom: 3 }}>{emoji}</div>
+        {/* Emoji + tittel inne i kortet */}
         <div style={{
-          fontSize: 13, fontWeight: 800,
-          color: isActive ? accent : "#333",
-          lineHeight: 1.3,
-        }}>{title}</div>
+          position: "absolute", bottom: 8, left: 8, right: 8,
+          color: "#fff", fontWeight: 800, fontSize: 12, lineHeight: 1.3,
+          textShadow: "0 1px 3px rgba(0,0,0,0.7)",
+        }}>
+          {emoji} {title}
+        </div>
       </div>
     </button>
   );
 }
 
-// ── Fullskjerm-spiller ────────────────────────────────────────────
-function FullscreenPlayer({ item, source, cover, playing, loading, progress, duration, onToggle, onSeek, onClose }) {
-  const accent = "#1B4D5C";
+// ── Innebygd spiller (ekspanderer under galleriet) ────────────────
+function InlinePlayer({ item, source, cover, playing, loading, progress, duration, onToggle, onSeek }) {
   const pct = duration ? (progress / duration) * 100 : 0;
 
   return (
     <div style={{
-      position: "fixed", inset: 0, zIndex: 100,
-      display: "flex", flexDirection: "column",
-      background: cover ? "transparent" : accent,
+      background: "#fff", borderRadius: 20,
+      overflow: "hidden", boxShadow: "0 4px 20px rgba(0,0,0,0.10)",
+      width: "100%",
     }}>
-      {/* Bakgrunnsbilde med blur */}
-      {cover && (
-        <>
-          <div style={{
-            position: "absolute", inset: 0,
-            backgroundImage: `url(${cover})`,
-            backgroundSize: "cover",
-            backgroundPosition: "center",
-            filter: "blur(40px) brightness(0.4)",
-            transform: "scale(1.1)",
-          }} />
-          <div style={{ position: "absolute", inset: 0, background: "rgba(0,0,0,0.35)" }} />
-        </>
-      )}
-
-      {/* Innhold */}
+      {/* Stort coverbilde */}
       <div style={{
-        position: "relative", zIndex: 1,
-        display: "flex", flexDirection: "column",
-        alignItems: "center", height: "100%",
-        padding: "0 24px 48px",
+        width: "100%", aspectRatio: "16 / 9",
+        background: cover
+          ? `url(${cover}) center/cover no-repeat`
+          : `linear-gradient(135deg, ${accent}, #2a6070)`,
+        position: "relative",
+        display: "flex", alignItems: "center", justifyContent: "center",
       }}>
-        {/* Lukk-knapp */}
-        <div style={{ width: "100%", display: "flex", justifyContent: "flex-start", paddingTop: 56 }}>
-          <button onClick={onClose} style={{
-            background: "rgba(255,255,255,0.15)", border: "none",
-            borderRadius: 12, padding: "8px 16px",
-            color: "#fff", fontWeight: 800, fontSize: 15,
-            cursor: "pointer", fontFamily: "inherit",
-          }}>
-            ← Tilbake
-          </button>
-        </div>
-
-        {/* Stort cover */}
+        {!cover && <span style={{ fontSize: 80 }}>{item.emoji}</span>}
+        {/* Gradient for tittellesbarhet */}
         <div style={{
-          width: "100%", maxWidth: 320,
-          marginTop: "auto", marginBottom: 32,
+          position: "absolute", inset: 0,
+          background: "linear-gradient(to bottom, transparent 40%, rgba(0,0,0,0.65) 100%)",
+        }} />
+        <div style={{
+          position: "absolute", bottom: 14, left: 16, right: 16,
         }}>
-          {cover ? (
-            <img
-              src={cover}
-              alt={item.title}
-              style={{
-                width: "100%", borderRadius: 20,
-                boxShadow: "0 20px 60px rgba(0,0,0,0.5)",
-                display: "block",
-              }}
-            />
-          ) : (
-            <div style={{
-              aspectRatio: "1", borderRadius: 20,
-              background: "rgba(255,255,255,0.1)",
-              display: "flex", alignItems: "center", justifyContent: "center",
-              fontSize: 100,
-            }}>{item.emoji}</div>
-          )}
-        </div>
-
-        {/* Tittel og artist */}
-        <div style={{ width: "100%", maxWidth: 320, marginBottom: 28 }}>
-          <div style={{ fontSize: 24, fontWeight: 900, color: "#fff", marginBottom: 4 }}>
+          <div style={{ color: "rgba(255,255,255,0.65)", fontSize: 12, fontWeight: 800, textTransform: "uppercase", letterSpacing: 1 }}>
+            {source === "nrk" ? "Hallo Bablo · NRK" : "Kutoppen · Spotify"}
+          </div>
+          <div style={{ color: "#fff", fontWeight: 900, fontSize: 20, marginTop: 2 }}>
             {item.emoji} {item.title}
           </div>
           {item.artist && (
-            <div style={{ fontSize: 15, fontWeight: 700, color: "rgba(255,255,255,0.6)" }}>{item.artist}</div>
-          )}
-          {!item.artist && (
-            <div style={{ fontSize: 15, fontWeight: 700, color: "rgba(255,255,255,0.6)" }}>
-              {source === "nrk" ? "Hallo Bablo · NRK" : "Kutoppen"}
-            </div>
+            <div style={{ color: "rgba(255,255,255,0.6)", fontWeight: 700, fontSize: 13 }}>{item.artist}</div>
           )}
         </div>
+      </div>
 
-        {/* Fremdriftslinje (kun NRK) */}
-        {source === "nrk" && duration > 0 && (
-          <div style={{ width: "100%", maxWidth: 320, marginBottom: 8 }}>
+      {/* Kontroller */}
+      <div style={{ padding: "16px 18px 22px" }}>
+        {loading && (
+          <div style={{ textAlign: "center", color: accent, fontWeight: 800, fontSize: 15, padding: "8px 0" }}>
+            Laster…
+          </div>
+        )}
+
+        {!loading && source === "nrk" && duration > 0 && (
+          <>
             <div onClick={onSeek} style={{
-              height: 6, background: "rgba(255,255,255,0.25)",
-              borderRadius: 3, cursor: "pointer", position: "relative",
+              height: 7, background: "#EDE8E1", borderRadius: 4,
+              cursor: "pointer", position: "relative", marginBottom: 8,
             }}>
               <div style={{
                 position: "absolute", left: 0, top: 0, bottom: 0,
-                width: `${pct}%`, background: "#fff", borderRadius: 3,
+                width: `${pct}%`, background: accent, borderRadius: 4,
                 transition: "width 0.4s linear",
               }} />
               <div style={{
                 position: "absolute", top: "50%", left: `${pct}%`,
                 transform: "translate(-50%, -50%)",
-                width: 14, height: 14, borderRadius: "50%",
-                background: "#fff", boxShadow: "0 1px 4px rgba(0,0,0,0.3)",
+                width: 16, height: 16, borderRadius: "50%",
+                background: accent, border: "3px solid #fff",
+                boxShadow: "0 1px 4px rgba(0,0,0,0.2)",
               }} />
             </div>
             <div style={{
               display: "flex", justifyContent: "space-between",
-              color: "rgba(255,255,255,0.5)", fontSize: 12, fontWeight: 700, marginTop: 6,
+              color: "#a09888", fontSize: 12, fontWeight: 700, marginBottom: 16,
             }}>
               <span>{formatTime(progress)}</span>
               <span>{formatTime(duration)}</span>
             </div>
-          </div>
+          </>
         )}
 
-        {/* Play/pause */}
-        <div style={{ marginTop: source === "nrk" ? 16 : 0 }}>
-          {loading ? (
-            <div style={{ color: "rgba(255,255,255,0.7)", fontWeight: 800, fontSize: 16 }}>Laster…</div>
-          ) : (
+        {!loading && (
+          <div style={{ display: "flex", justifyContent: "center", paddingTop: source === "spotify" ? 8 : 0 }}>
             <button onClick={onToggle} style={{
-              width: 80, height: 80, borderRadius: "50%",
-              background: playing ? "rgba(255,255,255,0.15)" : "#fff",
-              border: playing ? "2px solid rgba(255,255,255,0.4)" : "none",
-              cursor: "pointer", fontSize: 30,
+              width: 72, height: 72, borderRadius: "50%",
+              background: playing ? "#fff" : accent,
+              border: playing ? `3px solid ${accent}` : "none",
+              cursor: "pointer", fontSize: 28,
               display: "flex", alignItems: "center", justifyContent: "center",
-              color: playing ? "#fff" : accent,
-              boxShadow: "0 4px 20px rgba(0,0,0,0.3)",
-              transition: "all 0.18s ease",
+              color: playing ? accent : "#fff",
+              boxShadow: playing ? "none" : "0 4px 16px rgba(27,77,92,0.35)",
+              transition: "all 0.18s ease", fontFamily: "inherit",
             }}>
               {playing ? "⏸" : "▶"}
             </button>
-          )}
-        </div>
+          </div>
+        )}
       </div>
     </div>
   );
 }
 
-// ── Seksjonstittel ────────────────────────────────────────────────
 function SectionHeader({ icon, label }) {
   return (
-    <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "0 16px", marginBottom: 14 }}>
+    <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "0 16px", marginBottom: 12 }}>
       <span style={{ fontSize: 20 }}>{icon}</span>
-      <span style={{ fontWeight: 900, fontSize: 17, color: "#1B4D5C" }}>{label}</span>
+      <span style={{ fontWeight: 900, fontSize: 17, color: accent }}>{label}</span>
     </div>
   );
 }
 
 // ── Hovedapp ──────────────────────────────────────────────────────
 export default function App() {
-  const accent = "#1B4D5C";
-  const yellow = "#F5C842";
-
   const [auth, setAuth] = useState(null);
   const [nrkCovers, setNrkCovers] = useState({});
   const [spotifyCovers, setSpotifyCovers] = useState({});
@@ -366,9 +317,9 @@ export default function App() {
   const [playing, setPlaying] = useState(false);
   const [loading, setLoading] = useState(false);
   const [noDevice, setNoDevice] = useState(false);
-  const [showFullscreen, setShowFullscreen] = useState(false);
 
   const audioRef = useRef(null);
+  const playerRef = useRef(null);
   const [nrkUrl, setNrkUrl] = useState(null);
   const [progress, setProgress] = useState(0);
   const [duration, setDuration] = useState(0);
@@ -404,6 +355,13 @@ export default function App() {
     };
   }, []);
 
+  // Scroll spilleren inn i view når den dukker opp
+  useEffect(() => {
+    if (activeItem && playerRef.current) {
+      setTimeout(() => playerRef.current?.scrollIntoView({ behavior: "smooth", block: "nearest" }), 100);
+    }
+  }, [activeItem]);
+
   function stopAll() {
     const audio = audioRef.current;
     if (audio) { audio.pause(); audio.src = ""; }
@@ -411,7 +369,8 @@ export default function App() {
   }
 
   async function velgNrk(ep) {
-    stopAll(); setNoDevice(false); setSource("nrk"); setActiveItem(ep); setLoading(true); setShowFullscreen(true);
+    if (activeItem?.id === ep.id && source === "nrk") return; // allerede valgt
+    stopAll(); setNoDevice(false); setSource("nrk"); setActiveItem(ep); setLoading(true);
     try {
       const url = await fetchNrkManifest(ep.id);
       setNrkUrl(url);
@@ -428,12 +387,13 @@ export default function App() {
 
   async function velgSpotify(track) {
     if (!auth?.accessToken) return;
-    stopAll(); setNoDevice(false); setSource("spotify"); setActiveItem(track); setLoading(true); setShowFullscreen(true);
+    if (activeItem?.id === track.id && source === "spotify") return;
+    stopAll(); setNoDevice(false); setSource("spotify"); setActiveItem(track); setLoading(true);
     try {
       await spotifyPlay(track.uri, auth.accessToken);
       setPlaying(true);
     } catch (e) {
-      if (e.message === "no_device") { setNoDevice(true); setShowFullscreen(false); }
+      if (e.message === "no_device") setNoDevice(true);
     } finally { setLoading(false); }
   }
 
@@ -456,9 +416,7 @@ export default function App() {
     audio.currentTime = ((e.clientX - rect.left) / rect.width) * duration;
   }
 
-  const activeCover = activeItem
-    ? (source === "nrk" ? nrkCovers : spotifyCovers)[activeItem.id]
-    : null;
+  const activeCover = activeItem ? (source === "nrk" ? nrkCovers : spotifyCovers)[activeItem.id] : null;
 
   if (auth === null) return (
     <div style={{ minHeight: "100vh", background: "#FDF6EC", display: "flex", alignItems: "center", justifyContent: "center", fontFamily: "'Nunito', system-ui, sans-serif", fontSize: 18, color: accent, fontWeight: 800 }}>
@@ -474,24 +432,8 @@ export default function App() {
       <style>{`@import url('https://fonts.googleapis.com/css2?family=Nunito:wght@700;800;900&display=swap');`}</style>
       <audio ref={audioRef} />
 
-      {/* Fullskjerm-spiller */}
-      {showFullscreen && activeItem && (
-        <FullscreenPlayer
-          item={activeItem}
-          source={source}
-          cover={activeCover}
-          playing={playing}
-          loading={loading}
-          progress={progress}
-          duration={duration}
-          onToggle={togglePlay}
-          onSeek={seek}
-          onClose={() => setShowFullscreen(false)}
-        />
-      )}
-
-      {/* Galleri-visning */}
       <div style={{ display: "flex", flexDirection: "column", alignItems: "center", paddingBottom: 48 }}>
+
         {/* Header */}
         <div style={{ width: "100%", background: accent, padding: "28px 24px 20px", marginBottom: 28, boxSizing: "border-box" }}>
           <div style={{ fontSize: 13, fontWeight: 800, color: yellow, letterSpacing: 2, textTransform: "uppercase", marginBottom: 4 }}>Pleiboks</div>
@@ -500,56 +442,12 @@ export default function App() {
 
         <div style={{ width: "100%", maxWidth: 480, boxSizing: "border-box" }}>
 
-          {/* Mini-spiller stripe (vises når fullskjerm er lukket) */}
-          {activeItem && !showFullscreen && (
-            <div
-              onClick={() => setShowFullscreen(true)}
-              style={{
-                margin: "0 16px 24px",
-                background: accent, borderRadius: 16,
-                padding: "12px 16px",
-                display: "flex", alignItems: "center", gap: 12,
-                cursor: "pointer", boxShadow: "0 4px 14px rgba(27,77,92,0.25)",
-              }}
-            >
-              <div style={{
-                width: 44, height: 44, borderRadius: 8, flexShrink: 0,
-                background: activeCover ? `url(${activeCover}) center/cover` : "#2a6070",
-                display: "flex", alignItems: "center", justifyContent: "center", fontSize: 22,
-              }}>
-                {!activeCover && activeItem.emoji}
-              </div>
-              <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ color: "rgba(255,255,255,0.55)", fontSize: 11, fontWeight: 800, textTransform: "uppercase", letterSpacing: 1 }}>
-                  {playing ? "Spiller nå" : "Pauset"}
-                </div>
-                <div style={{ color: "#fff", fontWeight: 800, fontSize: 14, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
-                  {activeItem.emoji} {activeItem.title}
-                </div>
-              </div>
-              <button
-                onClick={(e) => { e.stopPropagation(); togglePlay(); }}
-                style={{
-                  width: 44, height: 44, borderRadius: "50%",
-                  background: playing ? "rgba(255,255,255,0.15)" : "#fff",
-                  border: "none", cursor: "pointer", fontSize: 20,
-                  display: "flex", alignItems: "center", justifyContent: "center",
-                  color: playing ? "#fff" : accent, flexShrink: 0,
-                }}
-              >
-                {playing ? "⏸" : "▶"}
-              </button>
-            </div>
-          )}
-
           {/* Hallo Bablo */}
           <SectionHeader icon="📻" label="Hallo Bablo" />
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr", gap: 12, padding: "0 16px", marginBottom: 32 }}>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14, padding: "0 16px", marginBottom: 32 }}>
             {EPISODES.map((ep) => (
               <MediaCard
-                key={ep.id}
-                title={ep.title}
-                emoji={ep.emoji}
+                key={ep.id} title={ep.title} emoji={ep.emoji}
                 cover={nrkCovers[ep.id]}
                 isActive={source === "nrk" && activeItem?.id === ep.id}
                 playing={playing}
@@ -560,12 +458,10 @@ export default function App() {
 
           {/* Kutoppen */}
           <SectionHeader icon="🎵" label="Kutoppen" />
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr", gap: 12, padding: "0 16px" }}>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14, padding: "0 16px", marginBottom: 28 }}>
             {TRACKS.map((track) => (
               <MediaCard
-                key={track.id}
-                title={track.title}
-                emoji={track.emoji}
+                key={track.id} title={track.title} emoji={track.emoji}
                 cover={spotifyCovers[track.id]}
                 isActive={source === "spotify" && activeItem?.id === track.id}
                 playing={playing}
@@ -573,6 +469,23 @@ export default function App() {
               />
             ))}
           </div>
+
+          {/* Innebygd spiller */}
+          {activeItem && (
+            <div ref={playerRef} style={{ padding: "0 16px" }}>
+              <InlinePlayer
+                item={activeItem}
+                source={source}
+                cover={activeCover}
+                playing={playing}
+                loading={loading}
+                progress={progress}
+                duration={duration}
+                onToggle={togglePlay}
+                onSeek={seek}
+              />
+            </div>
+          )}
         </div>
       </div>
     </div>
