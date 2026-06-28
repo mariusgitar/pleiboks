@@ -29,13 +29,24 @@ const EPISODES = [
 
 async function fetchStreamUrl(episodeId) {
   const res = await fetch(
-    `https://psapi.nrk.no/playback/manifest/podcast/${episodeId}`
+    `https://psapi.nrk.no/playback/manifest/podcast/${episodeId}`,
+    {
+      headers: {
+        "Accept": "application/json",
+      },
+    }
   );
-  if (!res.ok) throw new Error("Fant ikke avspillings-URL");
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
   const data = await res.json();
+
+  // Finn MP3-asset
   const assets = data?.playable?.assets;
-  if (!assets || assets.length === 0) throw new Error("Ingen lyd tilgjengelig");
-  return assets[0].url;
+  if (!assets || assets.length === 0) throw new Error("Ingen assets i respons");
+
+  const mp3 = assets.find((a) => a.format === "MP3") || assets[0];
+  if (!mp3?.url) throw new Error("Ingen URL i asset");
+
+  return mp3.url;
 }
 
 function formatTime(seconds) {
@@ -67,7 +78,8 @@ export default function App() {
       const url = await fetchStreamUrl(episode.id);
       setStreamUrl(url);
     } catch (e) {
-      setError("Klarte ikke laste episoden. Prøv igjen.");
+      console.error("Feil ved henting av episode:", e);
+      setError(`Klarte ikke laste episoden: ${e.message}`);
     } finally {
       setLoading(false);
     }
@@ -77,7 +89,12 @@ export default function App() {
     const audio = audioRef.current;
     if (!audio || !streamUrl) return;
     audio.src = streamUrl;
-    audio.play().then(() => setPlaying(true)).catch(() => setPlaying(false));
+    audio.play()
+      .then(() => setPlaying(true))
+      .catch((e) => {
+        console.error("Autoplay blokkert:", e);
+        setPlaying(false);
+      });
   }, [streamUrl]);
 
   useEffect(() => {
@@ -200,7 +217,7 @@ export default function App() {
           )}
 
           {error && (
-            <div style={{ textAlign: "center", color: "#f87171", padding: "8px 0", fontSize: 14 }}>
+            <div style={{ textAlign: "center", color: "#f87171", padding: "8px 0", fontSize: 13 }}>
               {error}
             </div>
           )}
