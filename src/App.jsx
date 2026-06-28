@@ -1,13 +1,68 @@
 import { useState, useEffect, useRef } from "react";
 
-const EPISODES = [
-  { id: "l_b9a1151b-f64b-4658-a115-1bf64ba658f9", title: "Oversvømmelse", emoji: "🌊" },
-  { id: "l_e6b980ce-8601-476a-b980-ce8601176a46", title: "Lottes banneshow", emoji: "🤐" },
-  { id: "l_fbd86653-d114-44a4-9866-53d11464a4ae", title: "Ja-dag", emoji: "✅" },
-  { id: "l_8172372d-510a-49d6-b237-2d510af9d6ac", title: "Superlimet", emoji: "🔧" },
+// ── Innholdsdata ──────────────────────────────────────────────────
+
+const NRK_SECTIONS = [
+  {
+    id: "hallo-bablo",
+    label: "Hallo Bablo",
+    icon: "📚",
+    type: "podcast",
+    items: [
+      { id: "l_b9a1151b-f64b-4658-a115-1bf64ba658f9", title: "Oversvømmelse", emoji: "🌊" },
+      { id: "l_e6b980ce-8601-476a-b980-ce8601176a46", title: "Lottes banneshow", emoji: "🤐" },
+      { id: "l_fbd86653-d114-44a4-9866-53d11464a4ae", title: "Ja-dag", emoji: "✅" },
+      { id: "l_8172372d-510a-49d6-b237-2d510af9d6ac", title: "Superlimet", emoji: "🔧" },
+    ],
+  },
+  {
+    id: "kokosbananas",
+    label: "Kokosbananas",
+    icon: "🥥",
+    type: "podcast",
+    items: [
+      { id: "l_810de249-e5d3-4a12-8de2-49e5d33a12d2", title: "Sykkelplanen", emoji: "🚲" },
+      { id: "l_21414849-4480-4ca2-8148-494480fca285", title: "Kokosbananas", emoji: "🍌" },
+    ],
+  },
+  {
+    id: "fantorangen",
+    label: "Fantorangen",
+    icon: "🧡",
+    type: "podcast",
+    items: [
+      { id: "l_8e42fb20-bb6f-404c-82fb-20bb6f004c5f", title: "Kjempe-Fantus", emoji: "🌳" },
+      { id: "l_01779e9e-49ad-41ff-b79e-9e49ad11ffc0", title: "Fantus forsvinn", emoji: "📺" },
+      { id: "l_9124669c-0fc4-4660-a466-9c0fc4b6609a", title: "Fantorangen tryllerydder", emoji: "🪄" },
+    ],
+  },
+  {
+    id: "karsten-petra",
+    label: "Karsten og Petra",
+    icon: "👫",
+    type: "podcast",
+    // Karsten og Petra er radioprogram — vi bruker musikk_fra_nrk_super-podkasten for
+    // de episodene som finnes der, ellers program-endepunktet
+    items: [
+      { id: "MKTT05000605", title: "Bestevenner", emoji: "🤝", programType: "program" },
+      { id: "MKTT05000505", title: "Petra begynner i barnehagen", emoji: "🏫", programType: "program" },
+      { id: "MKTT04000104", title: "Karsten kjører brannbil", emoji: "🚒", programType: "program" },
+    ],
+  },
+  {
+    id: "blime",
+    label: "BlimE!",
+    icon: "🌈",
+    type: "podcast",
+    items: [
+      { id: "l_bd313b9d-5f6b-44a1-b13b-9d5f6b84a16b", title: "Kom igjen 'a (2016)", emoji: "🎤" },
+      { id: "l_2ae9578e-b9ef-4451-a957-8eb9ef0451f2", title: "Halloween", emoji: "🎃" },
+      { id: "l_184d0d69-e4ba-4316-8d0d-69e4bad3165a", title: "Kua mi", emoji: "🐄" },
+    ],
+  },
 ];
 
-const TRACKS = [
+const SPOTIFY_TRACKS = [
   { id: "1SMtaNiuQHnLXDB03mEAY3", uri: "spotify:track:1SMtaNiuQHnLXDB03mEAY3", title: "Milkshake", artist: "Kutoppen & Lisa Børud", emoji: "🥤" },
   { id: "2qSh87wxgTnzmm3NvTMmVR", uri: "spotify:track:2qSh87wxgTnzmm3NvTMmVR", title: "Drømmested", artist: "Kutoppen & Klara", emoji: "🌈" },
   { id: "3MLes59DmfRs7PU5fz29Rn", uri: "spotify:track:3MLes59DmfRs7PU5fz29Rn", title: "Tru", artist: "Odd Nordstoga & Eva Weel Skram", emoji: "⭐" },
@@ -17,9 +72,10 @@ const TRACKS = [
 const accent = "#1B4D5C";
 const yellow = "#F5C842";
 
-// ── API ───────────────────────────────────────────────────────────
-async function fetchNrkManifest(id) {
-  const res = await fetch(`/api/manifest?id=${id}`);
+// ── NRK API ───────────────────────────────────────────────────────
+async function fetchNrkManifest(id, programType) {
+  const endpoint = programType === "program" ? "program" : "podcast";
+  const res = await fetch(`/api/manifest?id=${id}&type=${endpoint}`);
   if (!res.ok) throw new Error(`HTTP ${res.status}`);
   const data = await res.json();
   const assets = data?.playable?.assets;
@@ -29,9 +85,10 @@ async function fetchNrkManifest(id) {
   return mp3.url;
 }
 
-async function fetchNrkCover(id) {
+async function fetchNrkCover(id, programType) {
   try {
-    const res = await fetch(`/api/metadata?id=${id}`);
+    const endpoint = programType === "program" ? "program" : "podcast";
+    const res = await fetch(`/api/metadata?id=${id}&type=${endpoint}`);
     if (!res.ok) return null;
     const data = await res.json();
     const images = data?.preplay?.poster?.images || data?.preplay?.images || data?.images || data?.image;
@@ -41,10 +98,13 @@ async function fetchNrkCover(id) {
   } catch { return null; }
 }
 
+// ── Spotify API ───────────────────────────────────────────────────
 async function getMe() {
-  const res = await fetch("/api/me");
-  if (!res.ok) return null;
-  return res.json();
+  try {
+    const res = await fetch("/api/me");
+    if (!res.ok) return null;
+    return res.json();
+  } catch { return null; }
 }
 
 async function fetchSpotifyCovers(tracks) {
@@ -81,80 +141,85 @@ function formatTime(s) {
   return `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, "0")}`;
 }
 
-// ── Hent voksen ───────────────────────────────────────────────────
-function HentVoksenSkjerm({ onRetry }) {
+// ── Hent voksen (kun for Spotify) ────────────────────────────────
+function SpotifyVoksenModal({ onRetry, onDismiss }) {
   const [showGuide, setShowGuide] = useState(false);
   return (
     <div style={{
-      minHeight: "100vh", background: "#FDF6EC",
-      display: "flex", flexDirection: "column",
-      alignItems: "center", justifyContent: "center",
-      padding: "32px 24px", fontFamily: "'Nunito', system-ui, sans-serif", textAlign: "center",
-    }}>
-      <style>{`@import url('https://fonts.googleapis.com/css2?family=Nunito:wght@700;800;900&display=swap');`}</style>
-      <div style={{ fontSize: 80, marginBottom: 16 }}>🎵</div>
-      <h2 style={{ fontSize: 28, fontWeight: 900, color: accent, margin: "0 0 12px" }}>Musikken er ikke klar!</h2>
-      <p style={{ fontSize: 17, color: "#555", fontWeight: 700, margin: "0 0 32px", lineHeight: 1.5 }}>
-        Hent en voksen — de vet hva de skal gjøre 😊
-      </p>
-      <button onClick={() => setShowGuide(!showGuide)} style={{
-        background: "none", border: `2px solid ${accent}`, borderRadius: 12,
-        padding: "10px 20px", color: accent, fontWeight: 800, fontSize: 14,
-        cursor: "pointer", marginBottom: 24, fontFamily: "inherit",
-      }}>
-        {showGuide ? "Skjul guide" : "👨‍👩‍👧 Voksenguide"}
-      </button>
-      {showGuide && (
-        <div style={{
-          background: "#fff", borderRadius: 16, padding: "20px 24px",
-          maxWidth: 340, textAlign: "left", boxShadow: "0 4px 16px rgba(0,0,0,0.08)", marginBottom: 24,
-        }}>
-          <div style={{ fontWeight: 900, color: accent, fontSize: 15, marginBottom: 12 }}>Slik kobler du til Spotify:</div>
-          {["Åpne Spotify-appen på denne iPaden", "Spill en hvilken som helst sang i noen sekunder", "Gå tilbake til denne appen", 'Trykk "Prøv igjen" nedenfor'].map((step, i) => (
-            <div key={i} style={{ display: "flex", gap: 12, alignItems: "flex-start", marginBottom: 10 }}>
-              <div style={{
-                width: 26, height: 26, borderRadius: "50%", background: yellow,
-                display: "flex", alignItems: "center", justifyContent: "center",
-                fontWeight: 900, fontSize: 13, flexShrink: 0, color: accent,
-              }}>{i + 1}</div>
-              <div style={{ fontSize: 14, fontWeight: 700, color: "#333", lineHeight: 1.4, paddingTop: 3 }}>{step}</div>
-            </div>
-          ))}
+      position: "fixed", inset: 0, zIndex: 200,
+      background: "rgba(0,0,0,0.6)",
+      display: "flex", alignItems: "flex-end",
+      fontFamily: "'Nunito', system-ui, sans-serif",
+    }}
+      onClick={onDismiss}
+    >
+      <div
+        onClick={(e) => e.stopPropagation()}
+        style={{
+          background: "#FDF6EC", width: "100%",
+          borderRadius: "20px 20px 0 0",
+          padding: "24px 24px 40px",
+          maxHeight: "85vh", overflowY: "auto",
+        }}
+      >
+        <div style={{ textAlign: "center", marginBottom: 16 }}>
+          <div style={{ fontSize: 48, marginBottom: 8 }}>🎵</div>
+          <h2 style={{ fontWeight: 900, color: accent, fontSize: 22, margin: "0 0 8px" }}>
+            Musikken er ikke klar!
+          </h2>
+          <p style={{ color: "#555", fontWeight: 700, fontSize: 15, margin: 0 }}>
+            Hent en voksen — de vet hva de skal gjøre 😊
+          </p>
         </div>
-      )}
-      <button onClick={onRetry} style={{
-        background: accent, color: "#fff", border: "none", borderRadius: 14,
-        padding: "14px 32px", fontWeight: 900, fontSize: 16,
-        cursor: "pointer", fontFamily: "inherit", boxShadow: "0 4px 14px rgba(27,77,92,0.3)",
-      }}>Prøv igjen</button>
+
+        <button onClick={() => setShowGuide(!showGuide)} style={{
+          display: "block", width: "100%",
+          background: "none", border: `2px solid ${accent}`, borderRadius: 12,
+          padding: "10px 20px", color: accent, fontWeight: 800, fontSize: 14,
+          cursor: "pointer", marginBottom: 16, fontFamily: "inherit",
+        }}>
+          {showGuide ? "Skjul guide" : "👨‍👩‍👧 Voksenguide"}
+        </button>
+
+        {showGuide && (
+          <div style={{
+            background: "#fff", borderRadius: 16, padding: "16px 20px", marginBottom: 16,
+          }}>
+            <div style={{ fontWeight: 900, color: accent, fontSize: 14, marginBottom: 10 }}>
+              Slik kobler du til Spotify:
+            </div>
+            {["Åpne Spotify-appen på denne iPaden", "Spill en hvilken som helst sang i noen sekunder", "Gå tilbake til denne appen", 'Trykk "Prøv igjen" nedenfor'].map((step, i) => (
+              <div key={i} style={{ display: "flex", gap: 10, alignItems: "flex-start", marginBottom: 8 }}>
+                <div style={{
+                  width: 24, height: 24, borderRadius: "50%", background: yellow,
+                  display: "flex", alignItems: "center", justifyContent: "center",
+                  fontWeight: 900, fontSize: 12, flexShrink: 0, color: accent,
+                }}>{i + 1}</div>
+                <div style={{ fontSize: 13, fontWeight: 700, color: "#333", lineHeight: 1.4, paddingTop: 3 }}>{step}</div>
+              </div>
+            ))}
+          </div>
+        )}
+
+        <div style={{ display: "flex", gap: 10 }}>
+          <button onClick={onDismiss} style={{
+            flex: 1, background: "#fff", color: accent,
+            border: `2px solid ${accent}`, borderRadius: 14,
+            padding: "12px", fontWeight: 900, fontSize: 15,
+            cursor: "pointer", fontFamily: "inherit",
+          }}>Avbryt</button>
+          <button onClick={onRetry} style={{
+            flex: 2, background: accent, color: "#fff", border: "none",
+            borderRadius: 14, padding: "12px", fontWeight: 900, fontSize: 15,
+            cursor: "pointer", fontFamily: "inherit",
+          }}>Prøv igjen</button>
+        </div>
+      </div>
     </div>
   );
 }
 
-function InnloggingSkjerm() {
-  return (
-    <div style={{
-      minHeight: "100vh", background: "#FDF6EC",
-      display: "flex", flexDirection: "column",
-      alignItems: "center", justifyContent: "center",
-      padding: 32, fontFamily: "'Nunito', system-ui, sans-serif", textAlign: "center",
-    }}>
-      <style>{`@import url('https://fonts.googleapis.com/css2?family=Nunito:wght@700;800;900&display=swap');`}</style>
-      <div style={{ fontSize: 72, marginBottom: 16 }}>🔐</div>
-      <h2 style={{ fontWeight: 900, color: accent, fontSize: 24, margin: "0 0 10px" }}>Koble til Spotify</h2>
-      <p style={{ color: "#666", fontWeight: 700, marginBottom: 32, fontSize: 15 }}>
-        Logg inn med Spotify én gang, så er alt klart for barnet.
-      </p>
-      <a href="/api/login" style={{
-        background: "#1DB954", color: "#fff", borderRadius: 14,
-        padding: "14px 32px", fontWeight: 900, fontSize: 16,
-        textDecoration: "none", display: "inline-block",
-      }}>Logg inn med Spotify</a>
-    </div>
-  );
-}
-
-// ── Episodekort: 2x2, kvadratisk, cover fyller flaten ────────────
+// ── Mediakort ─────────────────────────────────────────────────────
 function MediaCard({ title, emoji, cover, isActive, playing, onClick }) {
   return (
     <button onClick={onClick} style={{
@@ -163,34 +228,30 @@ function MediaCard({ title, emoji, cover, isActive, playing, onClick }) {
       transform: isActive ? "scale(1.04)" : "scale(1)",
       transition: "all 0.18s ease",
     }}>
-      {/* Kvadratisk kortflate */}
       <div style={{
         width: "100%", aspectRatio: "1 / 1",
         background: cover ? `url(${cover}) center/cover no-repeat` : "#e8ddd0",
-        borderRadius: 16,
+        borderRadius: 14,
         border: isActive ? `3px solid ${yellow}` : "3px solid transparent",
         boxShadow: isActive ? "0 6px 20px rgba(27,77,92,0.3)" : "0 2px 8px rgba(0,0,0,0.08)",
         position: "relative", overflow: "hidden",
         display: "flex", alignItems: "center", justifyContent: "center",
       }}>
-        {!cover && <span style={{ fontSize: 44 }}>{emoji}</span>}
-        {/* Gradient for tittellesbarhet */}
+        {!cover && <span style={{ fontSize: 36 }}>{emoji}</span>}
         <div style={{
           position: "absolute", inset: 0,
-          background: "linear-gradient(to bottom, transparent 45%, rgba(0,0,0,0.65) 100%)",
+          background: "linear-gradient(to bottom, transparent 40%, rgba(0,0,0,0.65) 100%)",
         }} />
-        {/* Spilleindikator */}
         {isActive && playing && (
           <div style={{
-            position: "absolute", top: 8, right: 8,
-            width: 10, height: 10, borderRadius: "50%",
-            background: yellow, boxShadow: `0 0 8px ${yellow}`,
+            position: "absolute", top: 7, right: 7,
+            width: 9, height: 9, borderRadius: "50%",
+            background: yellow, boxShadow: `0 0 6px ${yellow}`,
           }} />
         )}
-        {/* Emoji + tittel inne i kortet */}
         <div style={{
-          position: "absolute", bottom: 8, left: 8, right: 8,
-          color: "#fff", fontWeight: 800, fontSize: 12, lineHeight: 1.3,
+          position: "absolute", bottom: 7, left: 7, right: 7,
+          color: "#fff", fontWeight: 800, fontSize: 11, lineHeight: 1.3,
           textShadow: "0 1px 3px rgba(0,0,0,0.7)",
         }}>
           {emoji} {title}
@@ -200,55 +261,46 @@ function MediaCard({ title, emoji, cover, isActive, playing, onClick }) {
   );
 }
 
-// ── Innebygd spiller (ekspanderer under galleriet) ────────────────
+// ── Seksjonstittel ────────────────────────────────────────────────
+function SectionHeader({ icon, label }) {
+  return (
+    <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "0 16px", marginBottom: 10 }}>
+      <span style={{ fontSize: 18 }}>{icon}</span>
+      <span style={{ fontWeight: 900, fontSize: 16, color: accent }}>{label}</span>
+    </div>
+  );
+}
+
+// ── Innebygd spiller ──────────────────────────────────────────────
 function InlinePlayer({ item, source, cover, playing, loading, progress, duration, onToggle, onSeek }) {
   const pct = duration ? (progress / duration) * 100 : 0;
-
   return (
     <div style={{
       background: "#fff", borderRadius: 20,
       overflow: "hidden", boxShadow: "0 4px 20px rgba(0,0,0,0.10)",
-      width: "100%",
     }}>
-      {/* Stort coverbilde */}
       <div style={{
         width: "100%", aspectRatio: "16 / 9",
-        background: cover
-          ? `url(${cover}) center/cover no-repeat`
-          : `linear-gradient(135deg, ${accent}, #2a6070)`,
-        position: "relative",
-        display: "flex", alignItems: "center", justifyContent: "center",
+        background: cover ? `url(${cover}) center/cover no-repeat` : `linear-gradient(135deg, ${accent}, #2a6070)`,
+        position: "relative", display: "flex", alignItems: "center", justifyContent: "center",
       }}>
-        {!cover && <span style={{ fontSize: 80 }}>{item.emoji}</span>}
-        {/* Gradient for tittellesbarhet */}
-        <div style={{
-          position: "absolute", inset: 0,
-          background: "linear-gradient(to bottom, transparent 40%, rgba(0,0,0,0.65) 100%)",
-        }} />
-        <div style={{
-          position: "absolute", bottom: 14, left: 16, right: 16,
-        }}>
-          <div style={{ color: "rgba(255,255,255,0.65)", fontSize: 12, fontWeight: 800, textTransform: "uppercase", letterSpacing: 1 }}>
-            {source === "nrk" ? "Hallo Bablo · NRK" : "Kutoppen · Spotify"}
+        {!cover && <span style={{ fontSize: 72 }}>{item.emoji}</span>}
+        <div style={{ position: "absolute", inset: 0, background: "linear-gradient(to bottom, transparent 40%, rgba(0,0,0,0.65) 100%)" }} />
+        <div style={{ position: "absolute", bottom: 14, left: 16, right: 16 }}>
+          <div style={{ color: "rgba(255,255,255,0.6)", fontSize: 11, fontWeight: 800, textTransform: "uppercase", letterSpacing: 1 }}>
+            {source === "spotify" ? "Kutoppen · Spotify" : "NRK Super"} · Spiller nå
           </div>
-          <div style={{ color: "#fff", fontWeight: 900, fontSize: 20, marginTop: 2 }}>
+          <div style={{ color: "#fff", fontWeight: 900, fontSize: 18, marginTop: 2 }}>
             {item.emoji} {item.title}
           </div>
-          {item.artist && (
-            <div style={{ color: "rgba(255,255,255,0.6)", fontWeight: 700, fontSize: 13 }}>{item.artist}</div>
-          )}
+          {item.artist && <div style={{ color: "rgba(255,255,255,0.6)", fontWeight: 700, fontSize: 12 }}>{item.artist}</div>}
         </div>
       </div>
 
-      {/* Kontroller */}
       <div style={{ padding: "16px 18px 22px" }}>
-        {loading && (
-          <div style={{ textAlign: "center", color: accent, fontWeight: 800, fontSize: 15, padding: "8px 0" }}>
-            Laster…
-          </div>
-        )}
+        {loading && <div style={{ textAlign: "center", color: accent, fontWeight: 800, fontSize: 15, padding: "8px 0" }}>Laster…</div>}
 
-        {!loading && source === "nrk" && duration > 0 && (
+        {!loading && source !== "spotify" && duration > 0 && (
           <>
             <div onClick={onSeek} style={{
               height: 7, background: "#EDE8E1", borderRadius: 4,
@@ -298,25 +350,18 @@ function InlinePlayer({ item, source, cover, playing, loading, progress, duratio
   );
 }
 
-function SectionHeader({ icon, label }) {
-  return (
-    <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "0 16px", marginBottom: 12 }}>
-      <span style={{ fontSize: 20 }}>{icon}</span>
-      <span style={{ fontWeight: 900, fontSize: 17, color: accent }}>{label}</span>
-    </div>
-  );
-}
-
 // ── Hovedapp ──────────────────────────────────────────────────────
 export default function App() {
-  const [auth, setAuth] = useState(null);
-  const [nrkCovers, setNrkCovers] = useState({});
+  const [auth, setAuth] = useState(null); // null=laster, false=ikke logget inn, obj=innlogget
   const [spotifyCovers, setSpotifyCovers] = useState({});
-  const [source, setSource] = useState(null);
+  const [nrkCovers, setNrkCovers] = useState({});
+
+  const [source, setSource] = useState(null); // "nrk" | "spotify"
   const [activeItem, setActiveItem] = useState(null);
   const [playing, setPlaying] = useState(false);
   const [loading, setLoading] = useState(false);
-  const [noDevice, setNoDevice] = useState(false);
+  const [showVoksenModal, setShowVoksenModal] = useState(false);
+  const [pendingSpotifyTrack, setPendingSpotifyTrack] = useState(null);
 
   const audioRef = useRef(null);
   const playerRef = useRef(null);
@@ -324,21 +369,28 @@ export default function App() {
   const [progress, setProgress] = useState(0);
   const [duration, setDuration] = useState(0);
 
-  useEffect(() => { getMe().then((d) => setAuth(d?.loggedIn ? d : false)); }, []);
-
+  // Sjekk Spotify stille i bakgrunnen (ikke blokker appen)
   useEffect(() => {
-    Promise.all(EPISODES.map((ep) => fetchNrkCover(ep.id))).then((results) => {
+    getMe().then((d) => setAuth(d?.loggedIn ? d : false));
+  }, []);
+
+  // Last NRK-covers for alle seksjoner
+  useEffect(() => {
+    const allItems = NRK_SECTIONS.flatMap((s) => s.items);
+    Promise.all(allItems.map((item) => fetchNrkCover(item.id, item.programType))).then((results) => {
       const map = {};
-      results.forEach((url, i) => { if (url) map[EPISODES[i].id] = url; });
+      results.forEach((url, i) => { if (url) map[allItems[i].id] = url; });
       setNrkCovers(map);
     });
   }, []);
 
+  // Last Spotify-covers (bare hvis innlogget)
   useEffect(() => {
     if (!auth?.accessToken) return;
-    fetchSpotifyCovers(TRACKS).then(setSpotifyCovers);
+    fetchSpotifyCovers(SPOTIFY_TRACKS).then(setSpotifyCovers);
   }, [auth]);
 
+  // NRK audio-events
   useEffect(() => {
     const audio = audioRef.current;
     if (!audio) return;
@@ -355,7 +407,7 @@ export default function App() {
     };
   }, []);
 
-  // Scroll spilleren inn i view når den dukker opp
+  // Scroll til spiller
   useEffect(() => {
     if (activeItem && playerRef.current) {
       setTimeout(() => playerRef.current?.scrollIntoView({ behavior: "smooth", block: "nearest" }), 100);
@@ -368,11 +420,11 @@ export default function App() {
     setNrkUrl(null); setPlaying(false); setProgress(0); setDuration(0);
   }
 
-  async function velgNrk(ep) {
-    if (activeItem?.id === ep.id && source === "nrk") return; // allerede valgt
-    stopAll(); setNoDevice(false); setSource("nrk"); setActiveItem(ep); setLoading(true);
+  async function velgNrk(item) {
+    if (activeItem?.id === item.id && source === "nrk") return;
+    stopAll(); setSource("nrk"); setActiveItem(item); setLoading(true);
     try {
-      const url = await fetchNrkManifest(ep.id);
+      const url = await fetchNrkManifest(item.id, item.programType);
       setNrkUrl(url);
     } catch (e) { console.error(e); }
     finally { setLoading(false); }
@@ -386,15 +438,37 @@ export default function App() {
   }, [nrkUrl]);
 
   async function velgSpotify(track) {
-    if (!auth?.accessToken) return;
+    // Ikke innlogget ennå — vis voksenskjerm og lagre track for retry
+    if (!auth?.accessToken) {
+      setPendingSpotifyTrack(track);
+      setShowVoksenModal(true);
+      return;
+    }
     if (activeItem?.id === track.id && source === "spotify") return;
-    stopAll(); setNoDevice(false); setSource("spotify"); setActiveItem(track); setLoading(true);
+    stopAll(); setSource("spotify"); setActiveItem(track); setLoading(true);
     try {
       await spotifyPlay(track.uri, auth.accessToken);
       setPlaying(true);
     } catch (e) {
-      if (e.message === "no_device") setNoDevice(true);
+      if (e.message === "no_device") {
+        setPendingSpotifyTrack(track);
+        setShowVoksenModal(true);
+      }
     } finally { setLoading(false); }
+  }
+
+  async function handleVoksenRetry() {
+    setShowVoksenModal(false);
+    // Prøv å hente token på nytt
+    const freshAuth = await getMe();
+    if (freshAuth?.loggedIn) setAuth(freshAuth);
+
+    if (pendingSpotifyTrack) {
+      const track = pendingSpotifyTrack;
+      setPendingSpotifyTrack(null);
+      // Vent litt så auth er oppdatert
+      setTimeout(() => velgSpotify(track), 300);
+    }
   }
 
   async function togglePlay() {
@@ -416,61 +490,81 @@ export default function App() {
     audio.currentTime = ((e.clientX - rect.left) / rect.width) * duration;
   }
 
-  const activeCover = activeItem ? (source === "nrk" ? nrkCovers : spotifyCovers)[activeItem.id] : null;
-
-  if (auth === null) return (
-    <div style={{ minHeight: "100vh", background: "#FDF6EC", display: "flex", alignItems: "center", justifyContent: "center", fontFamily: "'Nunito', system-ui, sans-serif", fontSize: 18, color: accent, fontWeight: 800 }}>
-      <style>{`@import url('https://fonts.googleapis.com/css2?family=Nunito:wght@700;800;900&display=swap');`}</style>
-      Laster…
-    </div>
-  );
-  if (auth === false) return <InnloggingSkjerm />;
-  if (noDevice) return <HentVoksenSkjerm onRetry={() => { setNoDevice(false); if (activeItem && source === "spotify") velgSpotify(activeItem); }} />;
+  const activeCover = activeItem
+    ? (source === "spotify" ? spotifyCovers : nrkCovers)[activeItem.id]
+    : null;
 
   return (
     <div style={{ minHeight: "100vh", background: "#FDF6EC", fontFamily: "'Nunito', system-ui, sans-serif" }}>
-      <style>{`@import url('https://fonts.googleapis.com/css2?family=Nunito:wght@700;800;900&display=swap');`}</style>
+      <style>{`@import url('https://fonts.googleapis.com/css2?family=Nunito:wght@700;800;900&display=swap'); * { box-sizing: border-box; }`}</style>
       <audio ref={audioRef} />
+
+      {/* Voksen-modal for Spotify */}
+      {showVoksenModal && (
+        <SpotifyVoksenModal
+          onRetry={handleVoksenRetry}
+          onDismiss={() => setShowVoksenModal(false)}
+        />
+      )}
 
       <div style={{ display: "flex", flexDirection: "column", alignItems: "center", paddingBottom: 48 }}>
 
         {/* Header */}
-        <div style={{ width: "100%", background: accent, padding: "28px 24px 20px", marginBottom: 28, boxSizing: "border-box" }}>
+        <div style={{ width: "100%", background: accent, padding: "28px 24px 20px", marginBottom: 24, boxSizing: "border-box" }}>
           <div style={{ fontSize: 13, fontWeight: 800, color: yellow, letterSpacing: 2, textTransform: "uppercase", marginBottom: 4 }}>Pleiboks</div>
           <h1 style={{ color: "#fff", fontSize: 32, fontWeight: 900, margin: 0, lineHeight: 1.1 }}>Hva vil du høre?</h1>
         </div>
 
-        <div style={{ width: "100%", maxWidth: 480, boxSizing: "border-box" }}>
+        <div style={{ width: "100%", maxWidth: 480 }}>
 
-          {/* Hallo Bablo */}
-          <SectionHeader icon="📻" label="Hallo Bablo" />
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14, padding: "0 16px", marginBottom: 32 }}>
-            {EPISODES.map((ep) => (
-              <MediaCard
-                key={ep.id} title={ep.title} emoji={ep.emoji}
-                cover={nrkCovers[ep.id]}
-                isActive={source === "nrk" && activeItem?.id === ep.id}
-                playing={playing}
-                onClick={() => velgNrk(ep)}
-              />
-            ))}
+          {/* NRK-seksjoner */}
+          {NRK_SECTIONS.map((section) => (
+            <div key={section.id} style={{ marginBottom: 28 }}>
+              <SectionHeader icon={section.icon} label={section.label} />
+              <div style={{
+                display: "grid",
+                gridTemplateColumns: `repeat(${Math.min(section.items.length, 4)}, 1fr)`,
+                gap: 10, padding: "0 16px",
+              }}>
+                {section.items.map((item) => (
+                  <MediaCard
+                    key={item.id}
+                    title={item.title}
+                    emoji={item.emoji}
+                    cover={nrkCovers[item.id]}
+                    isActive={source === "nrk" && activeItem?.id === item.id}
+                    playing={playing}
+                    onClick={() => velgNrk(item)}
+                  />
+                ))}
+              </div>
+            </div>
+          ))}
+
+          {/* Spotify-seksjon */}
+          <div style={{ marginBottom: 28 }}>
+            <SectionHeader icon="🎵" label="Kutoppen" />
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 10, padding: "0 16px" }}>
+              {SPOTIFY_TRACKS.map((track) => (
+                <MediaCard
+                  key={track.id}
+                  title={track.title}
+                  emoji={track.emoji}
+                  cover={spotifyCovers[track.id]}
+                  isActive={source === "spotify" && activeItem?.id === track.id}
+                  playing={playing}
+                  onClick={() => velgSpotify(track)}
+                />
+              ))}
+            </div>
+            {!auth?.loggedIn && (
+              <p style={{ color: "#a09888", fontSize: 12, fontWeight: 700, textAlign: "center", marginTop: 8, padding: "0 16px" }}>
+                🔒 Trykk på en sang for å koble til Spotify
+              </p>
+            )}
           </div>
 
-          {/* Kutoppen */}
-          <SectionHeader icon="🎵" label="Kutoppen" />
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14, padding: "0 16px", marginBottom: 28 }}>
-            {TRACKS.map((track) => (
-              <MediaCard
-                key={track.id} title={track.title} emoji={track.emoji}
-                cover={spotifyCovers[track.id]}
-                isActive={source === "spotify" && activeItem?.id === track.id}
-                playing={playing}
-                onClick={() => velgSpotify(track)}
-              />
-            ))}
-          </div>
-
-          {/* Innebygd spiller */}
+          {/* Spiller */}
           {activeItem && (
             <div ref={playerRef} style={{ padding: "0 16px" }}>
               <InlinePlayer
