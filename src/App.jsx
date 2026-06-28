@@ -28,18 +28,10 @@ const EPISODES = [
 ];
 
 async function fetchStreamUrl(episodeId) {
-  const res = await fetch(
-    `https://psapi.nrk.no/playback/manifest/podcast/${episodeId}`,
-    {
-      headers: {
-        "Accept": "application/json",
-      },
-    }
-  );
+  const res = await fetch(`/api/manifest?id=${episodeId}`);
   if (!res.ok) throw new Error(`HTTP ${res.status}`);
   const data = await res.json();
 
-  // Finn MP3-asset
   const assets = data?.playable?.assets;
   if (!assets || assets.length === 0) throw new Error("Ingen assets i respons");
 
