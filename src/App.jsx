@@ -1,107 +1,135 @@
 import { useState, useEffect, useRef, memo, useCallback } from "react";
+import { fetchRssFeed, fetchRssAudioUrl, fetchRssCover } from "./rss.js";
 
 // ── Innholdsdata ──────────────────────────────────────────────────
+// source: "rss"  → henter lyd og cover fra RSS-feed (robust, ingen proxy)
+// source: "api"  → bruker psapi.nrk.no via Vercel proxy (fallback)
+// rssUrl på seksjon: brukes til cover-lasting og episode-oppslag
+// rssUrl på item: overstyrer seksjonens feed (f.eks. BlimE fra musik-feed)
+
+const RSS = {
+  halloBablo:             "https://podkast.nrk.no/program/hallo_bablo.rss",
+  kokosbananas:           "https://podkast.nrk.no/program/kokosbananas.rss",
+  fantorangen:            "https://podkast.nrk.no/program/fantorangen.rss",
+  fantorangenfortellinger:"https://podkast.nrk.no/program/fantorangenfortellinger.rss",
+  fantorangensVitseshow:  "https://podkast.nrk.no/program/fantorangens_vitseshow.rss",
+  musikkFraNrkSuper:      "https://podkast.nrk.no/program/musikk_fra_nrk_super.rss",
+  brannbamsenBjornis:     "https://podkast.nrk.no/program/brannbamsen_bjoernis.rss",
+  billisOgBollos:         "https://podkast.nrk.no/program/billis_og_bollos.rss",
+};
+
 const NRK_SECTIONS = [
   {
     id: "hallo-bablo", label: "Hallo Bablo", icon: "📚",
     accent: "#1B6B8A", color: "#E3F2F9",
+    source: "rss", rssUrl: RSS.halloBablo,
     items: [
-      { id: "l_b9a1151b-f64b-4658-a115-1bf64ba658f9", title: "Oversvømmelse",              emoji: "🌊" },
-      { id: "l_fbd86653-d114-44a4-9866-53d11464a4ae", title: "Ja-dag",                     emoji: "✅" },
-      { id: "l_8172372d-510a-49d6-b237-2d510af9d6ac", title: "Superlimet",                 emoji: "🔧" },
-      { id: "l_e6b980ce-8601-476a-b980-ce8601176a46", title: "Lottes banneshow",           emoji: "🤐" },
-      { id: "l_9a5246e8-8e2b-4966-9246-e88e2b1966ca", title: "Fiskoteket",                 emoji: "🐟" },
-      { id: "l_135ec467-a256-4053-9ec4-67a25660539d", title: "Dinosaurmysteriet",          emoji: "🦕" },
-      { id: "l_e61edd4f-9d75-430e-9edd-4f9d75e30e50", title: "Det snør inne",              emoji: "❄️" },
-      { id: "l_af64b356-d05c-4cd6-a4b3-56d05cacd6b7", title: "Hva er inni det store egget?", emoji: "🥚" },
-      { id: "l_02e63def-dabd-4f1e-a63d-efdabd5f1e26", title: "Lotte leker død",           emoji: "💀" },
-      { id: "l_01e1ebbe-fe80-4e98-a1eb-befe804e98ba", title: "Bremsespor-mysteriet",       emoji: "🚗" },
-      { id: "l_6e7a2e2c-44f3-4660-ba2e-2c44f366607f", title: "Fantasibygging",             emoji: "🏗️" },
+      { id: "hb-oversvommelse",    title: "Oversvømmelse",               emoji: "🌊", source: "rss" },
+      { id: "hb-ja-dag",           title: "Ja-dag",                      emoji: "✅", source: "rss" },
+      { id: "hb-superlimet",       title: "Superlimet",                  emoji: "🔧", source: "rss" },
+      { id: "hb-lottes-banneshow", title: "Lottes banneshow",            emoji: "🤐", source: "rss" },
+      { id: "hb-fiskoteket",       title: "Fiskoteket",                  emoji: "🐟", source: "rss" },
+      { id: "hb-dinosaurmysteriet",title: "Dinosaurmysteriet",           emoji: "🦕", source: "rss" },
+      { id: "hb-det-snor-inne",    title: "Det snør inne",               emoji: "❄️", source: "rss" },
+      { id: "hb-egget",            title: "Hva er inni det store egget?",emoji: "🥚", source: "rss" },
+      { id: "hb-lotte-leker-dod",  title: "Lotte leker død",            emoji: "💀", source: "rss" },
+      { id: "hb-bremsespor",       title: "Bremsespor-mysteriet",        emoji: "🚗", source: "rss" },
+      { id: "hb-fantasibygging",   title: "Fantasibygging",              emoji: "🏗️", source: "rss" },
     ],
   },
   {
     id: "kokosbananas", label: "Kokosbananas", icon: "🥥",
     accent: "#B85A00", color: "#FFF0DC",
+    source: "rss", rssUrl: RSS.kokosbananas,
     items: [
-      { id: "l_810de249-e5d3-4a12-8de2-49e5d33a12d2", title: "Superdupersykkelen", emoji: "🚲" },
-      { id: "l_cb5acb0d-1284-47d0-9acb-0d128447d0c2", title: "Melonhvalen", emoji: "🍉🐋" },
-      { id: "l_c1919e6d-7311-4cae-919e-6d7311dcae09", title: "Bråkebyrået", emoji: "🔊" },
+      { id: "kok-sykkel",    title: "Superdupersykkelen", emoji: "🚲", source: "rss" },
+      { id: "kok-melon",     title: "Melonhvalen",        emoji: "🍉🐋", source: "rss" },
+      { id: "kok-brakebyraa",title: "Bråkebyrået",        emoji: "🔊", source: "rss" },
     ],
   },
   {
     id: "fantorangen", label: "Fantorangen", icon: "🧡",
     accent: "#D4700A", color: "#FFF3DC",
+    source: "rss", rssUrl: RSS.fantorangen,
     items: [
-      { id: "l_8e42fb20-bb6f-404c-82fb-20bb6f004c5f", title: "Kjempe-Fantus",          emoji: "🌳" },
-      { id: "l_01779e9e-49ad-41ff-b79e-9e49ad11ffc0", title: "Fantus forsvinn",         emoji: "📺" },
-      { id: "l_9124669c-0fc4-4660-a466-9c0fc4b6609a", title: "Tryllerydding",           emoji: "🪄" },
+      { id: "fan-kjempe",      title: "Kjempe-Fantus",   emoji: "🌳", source: "rss" },
+      { id: "fan-forsvinn",    title: "Fantus forsvinn",  emoji: "📺", source: "rss" },
+      { id: "fan-tryllerydding",title: "Tryllerydding",  emoji: "🪄", source: "rss" },
     ],
   },
   {
     id: "fantorangenfortellinger", label: "Fantorangenfortellinger", icon: "🎭",
     accent: "#B85A00", color: "#FFF3DC",
+    source: "rss", rssUrl: RSS.fantorangenfortellinger,
     items: [
-      { id: "l_17d00a92-711b-4bdc-900a-92711b2bdce1", title: "Gøy natt",               emoji: "🌙" },
-      { id: "l_f17536cc-f908-4c2d-b536-ccf908ec2df1", title: "Bursdagen",              emoji: "🎂" },
-      { id: "l_55d4584b-3c22-48a6-9458-4b3c2278a6f4", title: "Superdropsa",            emoji: "🍬" },
-      { id: "l_1d43056a-1d70-40e3-8305-6a1d7090e32d", title: "Fantorangen sit fast i do", emoji: "🚽" },
+      { id: "ff-goy-natt",   title: "Gøy natt",                emoji: "🌙", source: "rss" },
+      { id: "ff-bursdagen",  title: "Bursdagen",               emoji: "🎂", source: "rss" },
+      { id: "ff-superdropsa",title: "Superdropsa",             emoji: "🍬", source: "rss" },
+      { id: "ff-fasst-i-do", title: "Fantorangen sit fast i do",emoji: "🚽", source: "rss" },
     ],
   },
   {
+    // Karsten og Petra: ingen RSS — beholder psapi
     id: "karsten-petra", label: "Karsten og Petra", icon: "👫",
     accent: "#2D6B4A", color: "#E8F5EE",
+    source: "api",
     items: [
-      { id: "MKTT05000605", title: "Bestevenner",                  emoji: "🤝", programType: "program" },
-      { id: "MKTT05000505", title: "Petra begynner i barnehagen",  emoji: "🏫", programType: "program" },
-      { id: "MKTT04000104", title: "Karsten kjører brannbil",      emoji: "🚒", programType: "program" },
+      { id: "MKTT05000605", title: "Bestevenner",                 emoji: "🤝", source: "api", programType: "program" },
+      { id: "MKTT05000505", title: "Petra begynner i barnehagen", emoji: "🏫", source: "api", programType: "program" },
+      { id: "MKTT04000104", title: "Karsten kjører brannbil",     emoji: "🚒", source: "api", programType: "program" },
     ],
   },
   {
+    // BlimE! henter fra musikk_fra_nrk_super — episodene filtreres på tittel
     id: "blime", label: "BlimE!", icon: "🌈",
     accent: "#4f46e5", color: "#EDE8FF",
+    source: "rss", rssUrl: RSS.musikkFraNrkSuper,
     items: [
-      { id: "l_bd313b9d-5f6b-44a1-b13b-9d5f6b84a16b", title: "Kom igjen 'a",  emoji: "🎤" },
-      { id: "l_2ae9578e-b9ef-4451-a957-8eb9ef0451f2", title: "Halloween",     emoji: "🎃" },
-      { id: "l_184d0d69-e4ba-4316-8d0d-69e4bad3165a", title: "Kua mi",        emoji: "🐄" },
-      { id: "l_227c72ee-f0d8-477e-bc72-eef0d8877e3e", title: "Ferdig snakka", emoji: "🤫" },
-      { id: "l_ee431198-066e-4814-8311-98066e98148b", title: "Være med",      emoji: "🙌" },
-      { id: "l_ff643c27-b82e-44bd-a43c-27b82e34bd5f", title: "Sveve høyt",    emoji: "🪁" },
-      { id: "l_2a2d7975-67b3-48e2-ad79-7567b3c8e2ba", title: "Dynamitt",      emoji: "💥" },
-      { id: "l_d8d2e266-5ed9-41e0-92e2-665ed9b1e074", title: "Ser deg",       emoji: "👀" },
+      { id: "bl-kom-igjen",    title: "Kom igjen 'a",  emoji: "🎤", source: "rss" },
+      { id: "bl-halloween",    title: "Halloween",     emoji: "🎃", source: "rss" },
+      { id: "bl-kua-mi",       title: "Kua mi",        emoji: "🐄", source: "rss" },
+      { id: "bl-ferdig",       title: "Ferdig snakka", emoji: "🤫", source: "rss" },
+      { id: "bl-vaere-med",    title: "Være med",      emoji: "🙌", source: "rss" },
+      { id: "bl-sveve-hoyt",   title: "Sveve høyt",    emoji: "🪁", source: "rss" },
+      { id: "bl-dynamitt",     title: "Dynamitt",      emoji: "💥", source: "rss" },
+      { id: "bl-ser-deg",      title: "Ser deg",       emoji: "👀", source: "rss" },
     ],
   },
   {
     id: "fantus-musikantus", label: "Fantus musikantus", icon: "🎹",
     accent: "#D4700A", color: "#FFF3DC",
+    source: "rss", rssUrl: RSS.musikkFraNrkSuper,
     items: [
-      { id: "l_25663b06-aad8-4b84-a63b-06aad84b841a", title: "Hjulene på bussen", emoji: "🚌" },
-      { id: "l_704cb2d9-785e-4907-8cb2-d9785e490790", title: "Ma me mo",          emoji: "🎵" },
-      { id: "l_7514e801-f102-40bf-94e8-01f10200bffb", title: "Eggesangen",        emoji: "🥚" },
-      { id: "l_d121604d-3d7f-4c8c-a160-4d3d7f9c8cc9", title: "Fader Jakob",       emoji: "🔔" },
-      { id: "l_a0ef8d4a-c61d-4009-af8d-4ac61d3009ad", title: "Klappesangen",      emoji: "👏" },
+      { id: "fm-hjulene",    title: "Hjulene på bussen", emoji: "🚌", source: "rss" },
+      { id: "fm-ma-me-mo",   title: "Ma me mo",          emoji: "🎵", source: "rss" },
+      { id: "fm-eggesangen", title: "Eggesangen",        emoji: "🥚", source: "rss" },
+      { id: "fm-fader-jakob",title: "Fader Jakob",       emoji: "🔔", source: "rss" },
+      { id: "fm-klappe",     title: "Klappesangen",      emoji: "👏", source: "rss" },
     ],
   },
   {
     id: "musikk-fantorangens-verden", label: "Fantorangens verden", icon: "🎶",
     accent: "#D4700A", color: "#FFF3DC",
+    source: "rss", rssUrl: RSS.musikkFraNrkSuper,
     items: [
-      { id: "l_b34a81e1-a911-4824-8a81-e1a9118824e2", title: "Snibel Snabel",    emoji: "🐘" },
-      { id: "l_d2c4eeae-55c8-4cfc-84ee-ae55c80cfc0d", title: "Tannpussesangen",  emoji: "🪥" },
-      { id: "l_08f018af-0656-48dd-b018-af065638ddd4", title: "Sjøbanan",         emoji: "🍌" },
-      { id: "l_6c29c28c-69a1-43ef-a9c2-8c69a1b3efab", title: "Ryddesang",        emoji: "🧹" },
-      { id: "l_5e1b5f7f-abe9-4c8a-9b5f-7fabe9bc8a9f", title: "Tallsangen",       emoji: "🔢" },
-      { id: "l_7733df85-6d87-4e44-b3df-856d876e44cb", title: "Bæsjesangen",      emoji: "💩" },
+      { id: "fv-snibel",      title: "Snibel Snabel",   emoji: "🐘", source: "rss" },
+      { id: "fv-tannpuss",    title: "Tannpussesangen", emoji: "🪥", source: "rss" },
+      { id: "fv-sjobanan",    title: "Sjøbanan",        emoji: "🍌", source: "rss" },
+      { id: "fv-ryddesang",   title: "Ryddesang",       emoji: "🧹", source: "rss" },
+      { id: "fv-tallsangen",  title: "Tallsangen",      emoji: "🔢", source: "rss" },
+      { id: "fv-baesjesangen",title: "Bæsjesangen",     emoji: "💩", source: "rss" },
     ],
   },
   {
     id: "brannbamsen-bjornis", label: "Brannbamsen Bjørnis", icon: "🧸",
     accent: "#C0392B", color: "#FDECEA",
+    source: "rss", rssUrl: RSS.brannbamsenBjornis,
     items: [
-      { id: "l_a860e8cf-d13d-4bd3-a0e8-cfd13d4bd3b1", title: "Fingeren sitter fast", emoji: "🤞" },
-      { id: "l_5dbd32ec-3cf2-45ee-bd32-ec3cf2f5ee8f", title: "Tatt av vinden",      emoji: "💨" },
-      { id: "l_8f6f3340-973a-41bb-af33-40973a21bbe9", title: "På biblioteket",      emoji: "📖" },
-      { id: "l_2f4eac17-2cde-4e69-8eac-172cdece69ff", title: "Hund i fare",         emoji: "🐕" },
-      { id: "l_e4c45fd4-f4d7-4588-845f-d4f4d7c5883f", title: "Tur på stranda",      emoji: "🏖️" },
+      { id: "bb-finger",   title: "Fingeren sitter fast", emoji: "🤞", source: "rss" },
+      { id: "bb-vinden",   title: "Tatt av vinden",       emoji: "💨", source: "rss" },
+      { id: "bb-biblio",   title: "På biblioteket",       emoji: "📖", source: "rss" },
+      { id: "bb-hund",     title: "Hund i fare",          emoji: "🐕", source: "rss" },
+      { id: "bb-stranda",  title: "Tur på stranda",       emoji: "🏖️", source: "rss" },
     ],
   },
 ];
@@ -481,12 +509,42 @@ export default function App() {
   }, []);
 
   useEffect(() => {
-    const allItems = NRK_SECTIONS.flatMap((s) => s.items);
-    Promise.all(allItems.map((item) => fetchNrkCover(item.id, item.programType))).then((results) => {
+    // Last covers: RSS-seksjoner henter cover fra feeden,
+    // API-seksjoner bruker psapi via fetchNrkCover
+    async function loadAllCovers() {
       const map = {};
-      results.forEach((url, i) => { if (url) map[allItems[i].id] = url; });
+
+      await Promise.all(NRK_SECTIONS.map(async (section) => {
+        if (section.source === "rss" && section.rssUrl) {
+          // RSS: hent én cover per seksjon fra feed-headeren,
+          // bruk samme cover for alle episoder i seksjonen
+          try {
+            const { cover, items: feedItems } = await fetchRssFeed(section.rssUrl);
+            const sectionCover = cover || null;
+
+            section.items.forEach(item => {
+              // Prøv episodespesifikt cover, fall tilbake til serie-cover
+              const feedEp = feedItems.find(
+                ep => ep.title.toLowerCase().includes(item.title.toLowerCase().slice(0, 12))
+              );
+              map[item.id] = feedEp?.cover || sectionCover || null;
+            });
+          } catch (e) {
+            console.warn("RSS cover-feil:", section.id, e.message);
+          }
+        } else {
+          // API: hent cover per episode via psapi
+          await Promise.all(section.items.map(async (item) => {
+            const url = await fetchNrkCover(item.id, item.programType);
+            if (url) map[item.id] = url;
+          }));
+        }
+      }));
+
       setNrkCovers(map);
-    });
+    }
+
+    loadAllCovers();
   }, []);
 
   useEffect(() => {
@@ -583,7 +641,6 @@ export default function App() {
     setNrkUrl(null); setPlaying(false); setProgress(0); setDuration(0);
   }
 
-  // FIX 2: requestIdRef hindrer gammel fetch fra å "vinne"
   async function velgNrk(item, section) {
     if (activeItem?.id === item.id && source === "nrk") return;
     const requestId = ++requestIdRef.current;
@@ -592,13 +649,27 @@ export default function App() {
     setActiveItem({ ...item, cover: nrkCovers[item.id] });
     setActiveSection(section);
     setLoading(true);
-    setFullscreen(!isWide);  // FIX 3: ikke åpne fullskjerm på iPad
+    setFullscreen(!isWide);
     try {
-      const url = await fetchNrkManifest(item.id, item.programType);
+      let url;
+      const itemSource = item.source || section.source || "api";
+
+      if (itemSource === "rss") {
+        // RSS: finn episode i feed ved tittel-match, hent direkte lydURL
+        const rssUrl = section.rssUrl;
+        url = await fetchRssAudioUrl(rssUrl, item.title);
+      } else {
+        // API: bruk psapi via Vercel proxy (Karsten og Petra m.fl.)
+        url = await fetchNrkManifest(item.id, item.programType);
+      }
+
       if (requestId !== requestIdRef.current) return;
       setNrkUrl(url);
-    } catch (e) { console.error(e); }
-    finally { if (requestId === requestIdRef.current) setLoading(false); }
+    } catch (e) {
+      console.error("velgNrk feil:", item.title, e.message);
+    } finally {
+      if (requestId === requestIdRef.current) setLoading(false);
+    }
   }
 
   async function velgSpotify(track) {
