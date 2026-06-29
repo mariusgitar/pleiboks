@@ -573,8 +573,13 @@ export default function App() {
   }
 
   function stopAll() {
+    // Stopp NRK audio
     const audio = audioRef.current;
     if (audio) { audio.pause(); audio.src = ""; }
+    // Stopp Spotify SDK om det spiller
+    if (sdkPlayer.current && sdkReady.current) {
+      sdkPlayer.current.pause().catch(() => {});
+    }
     setNrkUrl(null); setPlaying(false); setProgress(0); setDuration(0);
   }
 
