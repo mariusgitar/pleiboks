@@ -10,10 +10,14 @@ import { fetchRssFeed, fetchRssAudioUrl, fetchRssCover } from "./rss.js";
 const RSS = {
   halloBablo:             "https://podkast.nrk.no/program/hallo_bablo.rss",
   kokosbananas:           "https://podkast.nrk.no/program/kokosbananas.rss",
-  fantorangen:            "https://podkast.nrk.no/program/fantorangen.rss",
+  // Fantorangen-episoder (Kjempe-Fantus, Fantus forsvinn etc.) ligger i fantorangenfortellinger
   fantorangenfortellinger:"https://podkast.nrk.no/program/fantorangenfortellinger.rss",
   fantorangensVitseshow:  "https://podkast.nrk.no/program/fantorangens_vitseshow.rss",
-  musikkFraNrkSuper:      "https://podkast.nrk.no/program/musikk_fra_nrk_super.rss",
+  // BlimE, Fantus musikantus og Fantorangens verden er sesonger under musikk_fra_nrk_super
+  // men musikk_fra_nrk_super.rss gir 404 — bruk sesong-spesifikke feeds
+  blime:                  "https://podkast.nrk.no/program/blime.rss",
+  fantusMusikantus:       "https://podkast.nrk.no/program/fantus_musikantus.rss",
+  fantorangensVerden:     "https://podkast.nrk.no/program/fantorangens_verden.rss",
   brannbamsenBjornis:     "https://podkast.nrk.no/program/brannbamsen_bjoernis.rss",
   billisOgBollos:         "https://podkast.nrk.no/program/billis_og_bollos.rss",
 };
@@ -50,7 +54,7 @@ const NRK_SECTIONS = [
   {
     id: "fantorangen", label: "Fantorangen", icon: "🧡",
     accent: "#D4700A", color: "#FFF3DC",
-    source: "rss", rssUrl: RSS.fantorangen,
+    source: "rss", rssUrl: RSS.fantorangenfortellinger,
     items: [
       { id: "fan-kjempe",      title: "Kjempe-Fantus",   emoji: "🌳", source: "rss" },
       { id: "fan-forsvinn",    title: "Fantus forsvinn",  emoji: "📺", source: "rss" },
@@ -83,7 +87,7 @@ const NRK_SECTIONS = [
     // BlimE! henter fra musikk_fra_nrk_super — episodene filtreres på tittel
     id: "blime", label: "BlimE!", icon: "🌈",
     accent: "#4f46e5", color: "#EDE8FF",
-    source: "rss", rssUrl: RSS.musikkFraNrkSuper,
+    source: "rss", rssUrl: RSS.blime,
     items: [
       { id: "bl-kom-igjen",    title: "Kom igjen 'a",  emoji: "🎤", source: "rss" },
       { id: "bl-halloween",    title: "Halloween",     emoji: "🎃", source: "rss" },
@@ -98,7 +102,7 @@ const NRK_SECTIONS = [
   {
     id: "fantus-musikantus", label: "Fantus musikantus", icon: "🎹",
     accent: "#D4700A", color: "#FFF3DC",
-    source: "rss", rssUrl: RSS.musikkFraNrkSuper,
+    source: "rss", rssUrl: RSS.fantusMusikantus,
     items: [
       { id: "fm-hjulene",    title: "Hjulene på bussen", emoji: "🚌", source: "rss" },
       { id: "fm-ma-me-mo",   title: "Ma me mo",          emoji: "🎵", source: "rss" },
@@ -110,7 +114,7 @@ const NRK_SECTIONS = [
   {
     id: "musikk-fantorangens-verden", label: "Fantorangens verden", icon: "🎶",
     accent: "#D4700A", color: "#FFF3DC",
-    source: "rss", rssUrl: RSS.musikkFraNrkSuper,
+    source: "rss", rssUrl: RSS.fantorangensVerden,
     items: [
       { id: "fv-snibel",      title: "Snibel Snabel",   emoji: "🐘", source: "rss" },
       { id: "fv-tannpuss",    title: "Tannpussesangen", emoji: "🪥", source: "rss" },
