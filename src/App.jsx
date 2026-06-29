@@ -227,7 +227,7 @@ function GlowRing({ size, radius, mini = false }) {
 }
 
 // ── Coverbilde ────────────────────────────────────────────────────
-function CoverImg({ item, sectionColor, size, radius, playing, onClick, mini=false }) {
+function CoverImg({ item, sectionColor, size, radius, playing, onClick, mini=false, fit="cover" }) {
   const [err, setErr] = useState(false);
   const t   = mini ? 2.5 : 5;
   const g   = mini ? 4   : 10;
@@ -237,7 +237,7 @@ function CoverImg({ item, sectionColor, size, radius, playing, onClick, mini=fal
       {playing && onClick && <GlowRing size={size} radius={radius} mini={mini} />}
       <div style={{ width:size, height:size, borderRadius:radius, overflow:"hidden", background:sectionColor, display:"flex", alignItems:"center", justifyContent:"center", position:"relative", zIndex:1, flexShrink:0 }}>
         {item.cover && !err
-          ? <img src={item.cover} alt={item.title} onError={()=>setErr(true)} style={{ width:"100%", height:"100%", objectFit:"cover", display:"block" }} />
+          ? <img src={item.cover} alt={item.title} onError={()=>setErr(true)} style={{ width:"100%", height:"100%", objectFit:fit, display:"block" }} />
           : <span style={{ fontSize:size*0.46 }}>{item.emoji}</span>
         }
       </div>
@@ -334,7 +334,7 @@ function PbCard({ item, section, isActive, playing, onClick }) {
     }}>
       <div style={{ width:"100%", aspectRatio:"1", background:section.color, display:"flex", alignItems:"center", justifyContent:"center", position:"relative", overflow:"hidden" }}>
         {item.cover && !err
-          ? <img src={item.cover} alt={item.title} onError={()=>setErr(true)} style={{ width:"100%", height:"100%", objectFit:"cover", display:"block" }} />
+          ? <img src={item.cover} alt={item.title} onError={()=>setErr(true)} style={{ width:"100%", height:"100%", objectFit:fit, display:"block" }} />
           : <span style={{ fontSize:42 }}>{item.emoji}</span>
         }
         {/* EQ-animasjon */}
@@ -565,78 +565,82 @@ export default function App() {
     return (
       <div style={{
         width: "100%",
-        minHeight: "calc(100vh - 80px)",
+        height: "clamp(560px, 72vh, 680px)",
         background: activeSection.accent,
         borderRadius: 28,
         display: "flex",
         flexDirection: "column",
-        alignItems: "center",
-        justifyContent: "center",
-        padding: "36px 28px",
+        padding: "28px 28px 32px",
         position: "sticky",
         top: 32,
-        boxShadow: "0 8px 32px rgba(0,0,0,0.18)",
+        alignSelf: "start",
+        overflow: "hidden",
+        boxShadow: "0 10px 36px rgba(0,0,0,0.18)",
         transition: "background 0.3s",
       }}>
-        <>
-          <div style={{ color:"rgba(255,255,255,0.55)", fontSize:"0.7rem", fontWeight:800, textTransform:"uppercase", letterSpacing:"0.18em", marginBottom:20 }}>
+        <div style={{ position:"absolute", inset:0, background:"linear-gradient(160deg,rgba(255,255,255,0.06) 0%,rgba(0,0,0,0.18) 100%)", pointerEvents:"none" }} />
+
+        <div style={{ position:"relative", zIndex:1, display:"flex", flexDirection:"column", height:"100%" }}>
+          <div style={{ color:"rgba(255,255,255,0.55)", fontSize:"0.7rem", fontWeight:800, textTransform:"uppercase", letterSpacing:"0.18em", textAlign:"center" }}>
             {source === "spotify" ? "Kutoppen · Spotify" : "NRK Super"}
           </div>
 
-          {/* Cover med glødring */}
-          <div style={{ marginBottom: 28 }}>
-            <CoverImg
-              item={activeItem}
-              sectionColor={activeSection.color}
-              size={220} radius={22}
-              playing={playing}
-              onClick={undefined}
-              mini={false}
-            />
-          </div>
-
-          <div style={{ width:"100%", textAlign:"center", marginBottom:22 }}>
-            <div style={{ color:"#fff", fontSize:"1.3rem", fontWeight:900, lineHeight:1.2, marginBottom:4 }}>
-              {activeItem.title}
+          <div style={{ flex:1, display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center", padding:"20px 0 12px" }}>
+            <div style={{ marginBottom: 28 }}>
+              <CoverImg
+                item={activeItem}
+                sectionColor={activeSection.color}
+                size={230} radius={22}
+                playing={playing}
+                onClick={undefined}
+                mini={false}
+                fit="contain"
+              />
             </div>
-            <div style={{ color:"rgba(255,255,255,0.5)", fontSize:"0.82rem", fontWeight:700 }}>
-              {activeItem.artist || activeSection.label}
-            </div>
-          </div>
 
-          {/* Fremdrift (NRK) */}
-          {source !== "spotify" && (
-            <div style={{ width:"100%", marginBottom:20 }}>
-              <div onClick={seek} style={{ height:5, background:"rgba(255,255,255,0.2)", borderRadius:3, cursor:"pointer", position:"relative" }}>
-                <div style={{ height:"100%", width:`${duration ? (progress/duration)*100 : 0}%`, background:"#fff", borderRadius:3 }} />
-                <div style={{ position:"absolute", top:"50%", left:`${duration ? (progress/duration)*100 : 0}%`, transform:"translate(-50%,-50%)", width:13, height:13, borderRadius:"50%", background:"#fff", boxShadow:"0 1px 5px rgba(0,0,0,0.3)" }} />
+            <div style={{ width:"100%", textAlign:"center" }}>
+              <div style={{ color:"#fff", fontSize:"1.45rem", fontWeight:900, lineHeight:1.2, marginBottom:6 }}>
+                {activeItem.title}
               </div>
-              <div style={{ display:"flex", justifyContent:"space-between", color:"rgba(255,255,255,0.32)", fontSize:"0.68rem", fontWeight:700, marginTop:5 }}>
-                <span>{formatTime(progress)}</span><span>{formatTime(duration)}</span>
+              <div style={{ color:"rgba(255,255,255,0.58)", fontSize:"0.9rem", fontWeight:700 }}>
+                {activeItem.artist || activeSection.label}
               </div>
             </div>
-          )}
+          </div>
 
-          {/* Knapper */}
-          <div style={{ display:"flex", alignItems:"center", justifyContent:"center", gap:20, marginTop: source === "spotify" ? 16 : 0 }}>
-            <button onClick={() => navigate(-1)} style={{ width:48, height:48, borderRadius:"50%", background:"rgba(255,255,255,0.1)", border:"2px solid rgba(255,255,255,0.2)", display:"flex", alignItems:"center", justifyContent:"center", cursor:"pointer", padding:0 }}>
-              <PrevIcon size={20} />
-            </button>
-            {loading ? (
-              <div style={{ color:"rgba(255,255,255,0.6)", fontWeight:800, fontSize:13 }}>Laster…</div>
-            ) : (
-              <button onClick={togglePlay} style={{ width:72, height:72, borderRadius:"50%", background:"#fff", border:"none", display:"flex", alignItems:"center", justifyContent:"center", cursor:"pointer", boxShadow:"0 6px 20px rgba(0,0,0,0.22)", padding:0 }}>
-                {playing
-                  ? <PauseIcon size={30} color={activeSection.accent} />
-                  : <PlayIcon  size={30} color={activeSection.accent} />
-                }
-              </button>
+          <div style={{ width:"100%", marginTop:"auto" }}>
+            {source !== "spotify" && (
+              <div style={{ width:"100%", marginBottom:22 }}>
+                <div onClick={seek} style={{ height:5, background:"rgba(255,255,255,0.2)", borderRadius:3, cursor:"pointer", position:"relative" }}>
+                  <div style={{ height:"100%", width:`${duration ? (progress/duration)*100 : 0}%`, background:"#fff", borderRadius:3 }} />
+                  <div style={{ position:"absolute", top:"50%", left:`${duration ? (progress/duration)*100 : 0}%`, transform:"translate(-50%,-50%)", width:13, height:13, borderRadius:"50%", background:"#fff", boxShadow:"0 1px 5px rgba(0,0,0,0.3)" }} />
+                </div>
+                <div style={{ display:"flex", justifyContent:"space-between", color:"rgba(255,255,255,0.32)", fontSize:"0.68rem", fontWeight:700, marginTop:5 }}>
+                  <span>{formatTime(progress)}</span><span>{formatTime(duration)}</span>
+                </div>
+              </div>
             )}
-            <button onClick={() => navigate(1)} style={{ width:48, height:48, borderRadius:"50%", background:"rgba(255,255,255,0.1)", border:"2px solid rgba(255,255,255,0.2)", display:"flex", alignItems:"center", justifyContent:"center", cursor:"pointer", padding:0 }}>
-              <NextIcon size={20} />
-            </button>
+
+            <div style={{ display:"flex", alignItems:"center", justifyContent:"center", gap:20 }}>
+              <button onClick={() => navigate(-1)} style={{ width:48, height:48, borderRadius:"50%", background:"rgba(255,255,255,0.1)", border:"2px solid rgba(255,255,255,0.2)", display:"flex", alignItems:"center", justifyContent:"center", cursor:"pointer", padding:0 }}>
+                <PrevIcon size={20} />
+              </button>
+              {loading ? (
+                <div style={{ color:"rgba(255,255,255,0.6)", fontWeight:800, fontSize:13 }}>Laster…</div>
+              ) : (
+                <button onClick={togglePlay} style={{ width:72, height:72, borderRadius:"50%", background:"#fff", border:"none", display:"flex", alignItems:"center", justifyContent:"center", cursor:"pointer", boxShadow:"0 6px 20px rgba(0,0,0,0.22)", padding:0 }}>
+                  {playing
+                    ? <PauseIcon size={30} color={activeSection.accent} />
+                    : <PlayIcon  size={30} color={activeSection.accent} />
+                  }
+                </button>
+              )}
+              <button onClick={() => navigate(1)} style={{ width:48, height:48, borderRadius:"50%", background:"rgba(255,255,255,0.1)", border:"2px solid rgba(255,255,255,0.2)", display:"flex", alignItems:"center", justifyContent:"center", cursor:"pointer", padding:0 }}>
+                <NextIcon size={20} />
+              </button>
+            </div>
           </div>
-        </>
+        </div>
       </div>
     );
   };
