@@ -106,8 +106,6 @@ const NRK_SECTIONS = [
   },
 ];
 
-const SHOW_SPOTIFY = true;
-
 const SPOTIFY_SECTION = {
   id: "spotify", label: "Musikk", icon: "🎵",
   accent: "#6D28D9", color: "#EDE8FF",
@@ -127,6 +125,8 @@ const SPOTIFY_SECTION = {
     { id: "5vNRhkKd0yEAg8suGBpjeY", uri: "spotify:track:5vNRhkKd0yEAg8suGBpjeY", title: "APT.",                 artist: "ROSÉ & Bruno Mars",              emoji: "🌹" },
   ],
 };
+
+const SHOW_SPOTIFY = true;
 
 // ── API ───────────────────────────────────────────────────────────
 async function fetchNrkManifest(id, programType) {
@@ -282,7 +282,7 @@ function CoverImg({ item, sectionColor, size, radius, playing, onClick, mini = f
       {playing && onClick && <GlowRing radius={radius} mini={mini} />}
       <div style={{ width:size, height:size, borderRadius:radius, overflow:"hidden", background:sectionColor, display:"flex", alignItems:"center", justifyContent:"center", position:"relative", zIndex:1, flexShrink:0 }}>
         {item.cover && !err
-          ? <img src={item.cover} alt={item.title} onError={()=>setErr(true)} style={{ width:"100%", height:"100%", objectFit:"contain", display:"block" }} />
+          ? <img src={item.cover} alt={item.title} onError={()=>setErr(true)} style={{ width:"100%", height:"100%", objectFit:"cover", display:"block" }} />
           : <span style={{ fontSize:size*0.46 }}>{item.emoji}</span>
         }
       </div>
@@ -351,7 +351,7 @@ const PbCard = memo(function PbCard({ item, section, isActive, playing, onClick 
     }}>
       <div style={{ width:"100%", aspectRatio:"1", background:section.color, display:"flex", alignItems:"center", justifyContent:"center", position:"relative", overflow:"hidden" }}>
         {item.cover && !err
-          ? <img src={item.cover} alt={item.title} onError={()=>setErr(true)} style={{ width:"100%", height:"100%", objectFit:"contain", display:"block" }} />
+          ? <img src={item.cover} alt={item.title} onError={()=>setErr(true)} style={{ width:"100%", height:"100%", objectFit:"cover", display:"block" }} />
           : <span style={{ fontSize:42 }}>{item.emoji}</span>
         }
         {isActive && playing && (
@@ -490,7 +490,7 @@ export default function App() {
   }, []);
 
   useEffect(() => {
-    if (!SHOW_SPOTIFY || !auth?.accessToken) return;
+    if (!auth?.accessToken) return;
     fetchSpotifyCovers(SPOTIFY_SECTION.items).then(setSpotifyCovers);
     // Init Spotify SDK når bruker er innlogget
     initSpotifySDK(auth.accessToken);
@@ -599,6 +599,14 @@ export default function App() {
   async function velgSpotify(track) {
     if (!auth?.accessToken) { setPendingTrack(track); setShowVoksen(true); return; }
     if (activeItem?.id === track.id && source === "spotify") return;
+
+    // iOS-FIX: activateElement() MÅ kalles synkront fra touch-event.
+    // Dette låser opp Safari sin autoplay-blokkering for denne sesjonen.
+    // Gjøres FØR enhver await, ellers mister vi touch-event-konteksten.
+    if (sdkPlayer.current) {
+      try { await sdkPlayer.current.activateElement(); } catch {}
+    }
+
     stopAll();
     setSource("spotify");
     setActiveItem({ ...track, cover: spotifyCovers[track.id] });
@@ -606,17 +614,18 @@ export default function App() {
     setLoading(true);
     setFullscreen(!isWide);
 
-    // Vent maks 3 sek på SDK device_id
-    let waited = 0;
-    while (!sdkDeviceId.current && waited < 3000) {
-      await new Promise(r => setTimeout(r, 200));
-      waited += 200;
+    // Ingen while-løkke — deviceId er klar etter SDK-init ved innlogging.
+    // Hvis ikke klar ennå: vent maks 2 sek med kortere intervall.
+    if (!sdkDeviceId.current) {
+      await new Promise(r => setTimeout(r, 500));
+    }
+    if (!sdkDeviceId.current) {
+      await new Promise(r => setTimeout(r, 1000));
     }
 
     const deviceId = sdkDeviceId.current;
 
     try {
-      // Bruk device_id om SDK er klar, ellers fallback
       const url = deviceId
         ? `/api/spotify-play?device_id=${deviceId}`
         : `/api/spotify-play`;
@@ -627,9 +636,16 @@ export default function App() {
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "feil");
+
+      // Etter play-kommandoen: resume() for å sikre at iOS starter lyden
+      if (sdkPlayer.current) {
+        try { await sdkPlayer.current.resume(); } catch {}
+      }
+
       setPlaying(true);
     } catch (e) {
       if (e.message === "no_device") { setPendingTrack(track); setShowVoksen(true); setFullscreen(false); }
+      console.error("Spotify play feil:", e);
     } finally { setLoading(false); }
   }
 
@@ -647,8 +663,9 @@ export default function App() {
       if (playing) { audio.pause(); setPlaying(false); }
       else { audio.play().then(() => setPlaying(true)); }
     } else if (source === "spotify") {
-      // Bruk SDK player.togglePlay() om tilgjengelig
       if (sdkPlayer.current && sdkReady.current) {
+        // iOS-FIX: aktiver AudioContext synkront før togglePlay
+        try { await sdkPlayer.current.activateElement(); } catch {}
         await sdkPlayer.current.togglePlay();
         setPlaying(p => !p);
       } else if (auth?.accessToken) {
@@ -661,9 +678,7 @@ export default function App() {
   function getFlattened() {
     const all = [];
     NRK_SECTIONS.forEach(s => s.items.forEach(item => all.push({ item, section: s, type: "nrk" })));
-    if (SHOW_SPOTIFY) {
-      SPOTIFY_SECTION.items.forEach(item => all.push({ item, section: SPOTIFY_SECTION, type: "spotify" }));
-    }
+    SPOTIFY_SECTION.items.forEach(item => all.push({ item, section: SPOTIFY_SECTION, type: "spotify" }));
     return all;
   }
   function navigate(dir) {
@@ -721,12 +736,8 @@ export default function App() {
             {NRK_SECTIONS.map((section) => (
               <PbSection key={section.id} section={section} covers={nrkCovers} activeId={activeItem?.id} activeSource={source} playing={playing} onSelect={(item) => velgNrkCb(item, section)} />
             ))}
-            {SHOW_SPOTIFY && (
-              <PbSection section={SPOTIFY_SECTION} covers={spotifyCovers} activeId={activeItem?.id} activeSource={source} playing={playing} onSelect={velgSpotifyCb} />
-            )}
-            {SHOW_SPOTIFY && !auth?.loggedIn && (
-              <p style={{ color:"#888", fontSize:"0.75rem", fontWeight:700, textAlign:"center", marginTop:-4, marginBottom:12 }}>🔒 Trykk på en sang for å koble til Spotify</p>
-            )}
+            <PbSection section={SPOTIFY_SECTION} covers={spotifyCovers} activeId={activeItem?.id} activeSource={source} playing={playing} onSelect={velgSpotifyCb} />
+            {!auth?.loggedIn && <p style={{ color:"#888", fontSize:"0.75rem", fontWeight:700, textAlign:"center", marginTop:-4, marginBottom:12 }}>🔒 Trykk på en Kutoppen-sang for å koble til Spotify</p>}
           </div>
         </div>
       ) : (
@@ -745,12 +756,8 @@ export default function App() {
               {NRK_SECTIONS.map((section) => (
                 <PbSection key={section.id} section={section} covers={nrkCovers} activeId={activeItem?.id} activeSource={source} playing={playing} onSelect={(item) => velgNrkCb(item, section)} />
               ))}
-              {SHOW_SPOTIFY && (
               <PbSection section={SPOTIFY_SECTION} covers={spotifyCovers} activeId={activeItem?.id} activeSource={source} playing={playing} onSelect={velgSpotifyCb} />
-            )}
-              {SHOW_SPOTIFY && !auth?.loggedIn && (
-              <p style={{ color:"#888", fontSize:"0.75rem", fontWeight:700, textAlign:"center", marginTop:-4, marginBottom:12 }}>🔒 Trykk på en sang for å koble til Spotify</p>
-            )}
+              {!auth?.loggedIn && <p style={{ color:"#888", fontSize:"0.75rem", fontWeight:700, textAlign:"center", marginTop:-4, marginBottom:12 }}>🔒 Trykk på en Kutoppen-sang for å koble til Spotify</p>}
             </div>
           </div>
           {activeItem && !fullscreen && (
