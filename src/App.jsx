@@ -517,7 +517,129 @@ export default function App() {
     audio.currentTime = ((e.clientX - rect.left) / rect.width) * duration;
   }
 
-  const allCovers = { ...nrkCovers, ...spotifyCovers };
+  // iPad-deteksjon
+  const [isWide, setIsWide] = useState(
+    typeof window !== "undefined" ? window.innerWidth >= 768 : false
+  );
+  useEffect(() => {
+    const handler = () => setIsWide(window.innerWidth >= 768);
+    window.addEventListener("resize", handler);
+    return () => window.removeEventListener("resize", handler);
+  }, []);
+
+  // ── Katalog-panel (brukes i begge layouts) ────────────────────
+  const Katalog = () => (
+    <>
+      {NRK_SECTIONS.map((section) => (
+        <PbSection
+          key={section.id}
+          section={section}
+          covers={nrkCovers}
+          activeId={activeItem?.id}
+          activeSource={source}
+          playing={playing}
+          onSelect={(item) => velgNrk(item, section)}
+        />
+      ))}
+      <PbSection
+        section={SPOTIFY_SECTION}
+        covers={spotifyCovers}
+        activeId={activeItem?.id}
+        activeSource={source}
+        playing={playing}
+        onSelect={(item) => velgSpotify(item)}
+      />
+      {!auth?.loggedIn && (
+        <p style={{ color:"#888", fontSize:"0.75rem", fontWeight:700, textAlign:"center", marginTop:-4, marginBottom:12 }}>
+          🔒 Trykk på en Kutoppen-sang for å koble til Spotify
+        </p>
+      )}
+    </>
+  );
+
+  // ── iPad-spiller-panel (venstre kolonne) ─────────────────────
+  const IpadPlayer = () => {
+    // På større skjermer skal avspilleren først vises når noe er valgt.
+    if (!activeItem || !activeSection) return null;
+
+    return (
+      <div style={{
+        width: "100%",
+        minHeight: "calc(100vh - 80px)",
+        background: activeSection.accent,
+        borderRadius: 28,
+        display: "flex",
+        flexDirection: "column",
+        alignItems: "center",
+        justifyContent: "center",
+        padding: "36px 28px",
+        position: "sticky",
+        top: 32,
+        boxShadow: "0 8px 32px rgba(0,0,0,0.18)",
+        transition: "background 0.3s",
+      }}>
+        <>
+          <div style={{ color:"rgba(255,255,255,0.55)", fontSize:"0.7rem", fontWeight:800, textTransform:"uppercase", letterSpacing:"0.18em", marginBottom:20 }}>
+            {source === "spotify" ? "Kutoppen · Spotify" : "NRK Super"}
+          </div>
+
+          {/* Cover med glødring */}
+          <div style={{ marginBottom: 28 }}>
+            <CoverImg
+              item={activeItem}
+              sectionColor={activeSection.color}
+              size={220} radius={22}
+              playing={playing}
+              onClick={undefined}
+              mini={false}
+            />
+          </div>
+
+          <div style={{ width:"100%", textAlign:"center", marginBottom:22 }}>
+            <div style={{ color:"#fff", fontSize:"1.3rem", fontWeight:900, lineHeight:1.2, marginBottom:4 }}>
+              {activeItem.title}
+            </div>
+            <div style={{ color:"rgba(255,255,255,0.5)", fontSize:"0.82rem", fontWeight:700 }}>
+              {activeItem.artist || activeSection.label}
+            </div>
+          </div>
+
+          {/* Fremdrift (NRK) */}
+          {source !== "spotify" && (
+            <div style={{ width:"100%", marginBottom:20 }}>
+              <div onClick={seek} style={{ height:5, background:"rgba(255,255,255,0.2)", borderRadius:3, cursor:"pointer", position:"relative" }}>
+                <div style={{ height:"100%", width:`${duration ? (progress/duration)*100 : 0}%`, background:"#fff", borderRadius:3 }} />
+                <div style={{ position:"absolute", top:"50%", left:`${duration ? (progress/duration)*100 : 0}%`, transform:"translate(-50%,-50%)", width:13, height:13, borderRadius:"50%", background:"#fff", boxShadow:"0 1px 5px rgba(0,0,0,0.3)" }} />
+              </div>
+              <div style={{ display:"flex", justifyContent:"space-between", color:"rgba(255,255,255,0.32)", fontSize:"0.68rem", fontWeight:700, marginTop:5 }}>
+                <span>{formatTime(progress)}</span><span>{formatTime(duration)}</span>
+              </div>
+            </div>
+          )}
+
+          {/* Knapper */}
+          <div style={{ display:"flex", alignItems:"center", justifyContent:"center", gap:20, marginTop: source === "spotify" ? 16 : 0 }}>
+            <button onClick={() => navigate(-1)} style={{ width:48, height:48, borderRadius:"50%", background:"rgba(255,255,255,0.1)", border:"2px solid rgba(255,255,255,0.2)", display:"flex", alignItems:"center", justifyContent:"center", cursor:"pointer", padding:0 }}>
+              <PrevIcon size={20} />
+            </button>
+            {loading ? (
+              <div style={{ color:"rgba(255,255,255,0.6)", fontWeight:800, fontSize:13 }}>Laster…</div>
+            ) : (
+              <button onClick={togglePlay} style={{ width:72, height:72, borderRadius:"50%", background:"#fff", border:"none", display:"flex", alignItems:"center", justifyContent:"center", cursor:"pointer", boxShadow:"0 6px 20px rgba(0,0,0,0.22)", padding:0 }}>
+                {playing
+                  ? <PauseIcon size={30} color={activeSection.accent} />
+                  : <PlayIcon  size={30} color={activeSection.accent} />
+                }
+              </button>
+            )}
+            <button onClick={() => navigate(1)} style={{ width:48, height:48, borderRadius:"50%", background:"rgba(255,255,255,0.1)", border:"2px solid rgba(255,255,255,0.2)", display:"flex", alignItems:"center", justifyContent:"center", cursor:"pointer", padding:0 }}>
+              <NextIcon size={20} />
+            </button>
+          </div>
+        </>
+      </div>
+    );
+  };
 
   return (
     <div style={{ minHeight:"100vh", fontFamily:"'Nunito',system-ui,sans-serif", position:"relative" }}>
@@ -528,99 +650,101 @@ export default function App() {
         @keyframes sunSpin    { from{transform:rotate(0deg)}  to{transform:rotate(360deg)} }
         @keyframes glowSwell  { 0%,100%{opacity:0.6;transform:scale(0.97)} 50%{opacity:0.95;transform:scale(1.03)} }
         @keyframes eqbar      { from{height:3px} to{height:13px} }
+        @keyframes bob        { 0%,100%{transform:translateY(0)} 50%{transform:translateY(-7px)} }
         .pb-row::-webkit-scrollbar { display:none }
       `}</style>
 
       <SkyBg />
       <audio ref={audioRef} />
 
-      {/* Fullskjerm */}
-      {fullscreen && activeItem && activeSection && (
-        <FullPlayer
-          item={activeItem} section={activeSection} source={source}
-          playing={playing} loading={loading} progress={progress} duration={duration}
-          onToggle={togglePlay} onClose={() => setFullscreen(false)} onSeek={seek}
-          onPrev={() => navigate(-1)} onNext={() => navigate(1)}
-        />
-      )}
-
       {/* Voksen-modal */}
       {showVoksen && (
         <SpotifyVoksenModal onRetry={handleVoksenRetry} onDismiss={() => setShowVoksen(false)} />
       )}
 
-      {/* Hoved-innhold */}
-      <div style={{ position:"relative", zIndex:1, maxWidth:480, margin:"0 auto", padding:"0 0 120px" }}>
-
-        {/* Header */}
-        <div style={{ padding:"3rem 1.1rem 1rem" }}>
-          <div style={{ fontSize:"2rem", animation:"bob 3s ease-in-out infinite" }}>🎧</div>
-          <h1 style={{ fontSize:"1.8rem", fontWeight:900, color:"#1B4D5C", margin:"0.3rem 0 0.1rem" }}>Pleiboksen</h1>
-          <p style={{ fontSize:"0.8rem", fontWeight:700, color:"#1B4D5C", opacity:0.5, margin:0 }}>Hva vil du høre?</p>
-        </div>
-
-        {/* Seksjoner */}
-        <div style={{ padding:"0.2rem 1.1rem 0" }}>
-          {NRK_SECTIONS.map((section) => (
-            <PbSection
-              key={section.id}
-              section={section}
-              covers={nrkCovers}
-              activeId={activeItem?.id}
-              activeSource={source}
-              playing={playing}
-              onSelect={(item) => velgNrk(item, section)}
-            />
-          ))}
-          <PbSection
-            section={SPOTIFY_SECTION}
-            covers={spotifyCovers}
-            activeId={activeItem?.id}
-            activeSource={source}
-            playing={playing}
-            onSelect={(item) => velgSpotify(item)}
-          />
-          {!auth?.loggedIn && (
-            <p style={{ color:"#888", fontSize:"0.75rem", fontWeight:700, textAlign:"center", marginTop:-4, marginBottom:12 }}>
-              🔒 Trykk på en Kutoppen-sang for å koble til Spotify
-            </p>
-          )}
-        </div>
-      </div>
-
-      {/* Mini-spiller */}
-      {activeItem && !fullscreen && (
+      {isWide ? (
+        /* ── iPad: to kolonner ── */
         <div style={{
-          position:"fixed", bottom:12, left:12, right:12, zIndex:50,
-          maxWidth:456, margin:"0 auto",
-          background: activeSection?.accent || "#1B4D5C",
-          borderRadius:22, padding:"12px 14px 14px",
-          display:"flex", alignItems:"center", gap:12,
-          boxShadow:"0 8px 32px rgba(0,0,0,0.25)",
-          cursor:"pointer",
-        }} onClick={() => setFullscreen(true)}>
-          <CoverImg
-            item={activeItem} sectionColor={activeSection?.color || "#E3F2F9"}
-            size={50} radius={12} playing={playing}
-            onClick={(e) => { e.stopPropagation(); setFullscreen(true); }}
-            mini={true}
-          />
-          <div style={{ flex:1, minWidth:0 }}>
-            <div style={{ color:"rgba(255,255,255,0.5)", fontSize:"0.65rem", fontWeight:800, textTransform:"uppercase", letterSpacing:"0.1em", marginBottom:2 }}>Spiller nå</div>
-            <div style={{ color:"#fff", fontWeight:900, fontSize:"0.95rem", whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis" }}>
-              {activeItem.emoji} {activeItem.title}
+          position:"relative",
+          zIndex:1,
+          display:"grid",
+          gridTemplateColumns: activeItem ? "360px minmax(0, 1fr)" : "minmax(0, 1fr)",
+          gap:28,
+          padding:"32px 32px 48px",
+          maxWidth: activeItem ? 1040 : 620,
+          margin:"0 auto",
+          alignItems:"stretch",
+        }}>
+
+          {/* Venstre: spiller */}
+          <IpadPlayer />
+
+          {/* Høyre: katalog */}
+          <div style={{ minWidth:0 }}>
+            <div style={{ marginBottom:20 }}>
+              <div style={{ fontSize:"1.8rem", animation:"bob 3s ease-in-out infinite", display:"inline-block" }}>🎧</div>
+              <h1 style={{ fontSize:"1.6rem", fontWeight:900, color:"#1B4D5C", margin:"0.2rem 0 0" }}>Pleiboksen</h1>
+              <p style={{ fontSize:"0.78rem", fontWeight:700, color:"#1B4D5C", opacity:0.5, margin:0 }}>Hva vil du høre?</p>
+            </div>
+            <Katalog />
+          </div>
+        </div>
+      ) : (
+        /* ── Mobil: fullskjerm spiller + liste ── */
+        <>
+          {fullscreen && activeItem && activeSection && (
+            <FullPlayer
+              item={activeItem} section={activeSection} source={source}
+              playing={playing} loading={loading} progress={progress} duration={duration}
+              onToggle={togglePlay} onClose={() => setFullscreen(false)} onSeek={seek}
+              onPrev={() => navigate(-1)} onNext={() => navigate(1)}
+            />
+          )}
+
+          <div style={{ position:"relative", zIndex:1, maxWidth:480, margin:"0 auto", padding:"0 0 120px" }}>
+            <div style={{ padding:"3rem 1.1rem 1rem" }}>
+              <div style={{ fontSize:"2rem", animation:"bob 3s ease-in-out infinite", display:"inline-block" }}>🎧</div>
+              <h1 style={{ fontSize:"1.8rem", fontWeight:900, color:"#1B4D5C", margin:"0.3rem 0 0.1rem" }}>Pleiboksen</h1>
+              <p style={{ fontSize:"0.8rem", fontWeight:700, color:"#1B4D5C", opacity:0.5, margin:0 }}>Hva vil du høre?</p>
+            </div>
+            <div style={{ padding:"0.2rem 1.1rem 0" }}>
+              <Katalog />
             </div>
           </div>
-          <button
-            onClick={(e) => { e.stopPropagation(); togglePlay(); }}
-            style={{ width:50, height:50, borderRadius:"50%", background:"rgba(255,255,255,0.18)", border:"2.5px solid rgba(255,255,255,0.35)", display:"flex", alignItems:"center", justifyContent:"center", cursor:"pointer", padding:0, flexShrink:0 }}
-          >
-            {playing ? <PauseIcon size={20} /> : <PlayIcon size={20} />}
-          </button>
-        </div>
-      )}
 
-      <style>{`@keyframes bob { 0%,100%{transform:translateY(0)} 50%{transform:translateY(-7px)} }`}</style>
+          {/* Mini-spiller */}
+          {activeItem && !fullscreen && (
+            <div style={{
+              position:"fixed", bottom:12, left:12, right:12, zIndex:50,
+              maxWidth:456, margin:"0 auto",
+              background: activeSection?.accent || "#1B4D5C",
+              borderRadius:22, padding:"12px 14px 14px",
+              display:"flex", alignItems:"center", gap:12,
+              boxShadow:"0 8px 32px rgba(0,0,0,0.25)",
+              cursor:"pointer",
+            }} onClick={() => setFullscreen(true)}>
+              <CoverImg
+                item={activeItem} sectionColor={activeSection?.color || "#E3F2F9"}
+                size={50} radius={12} playing={playing}
+                onClick={(e) => { e.stopPropagation(); setFullscreen(true); }}
+                mini={true}
+              />
+              <div style={{ flex:1, minWidth:0 }}>
+                <div style={{ color:"rgba(255,255,255,0.5)", fontSize:"0.65rem", fontWeight:800, textTransform:"uppercase", letterSpacing:"0.1em", marginBottom:2 }}>Spiller nå</div>
+                <div style={{ color:"#fff", fontWeight:900, fontSize:"0.95rem", whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis" }}>
+                  {activeItem.emoji} {activeItem.title}
+                </div>
+              </div>
+              <button
+                onClick={(e) => { e.stopPropagation(); togglePlay(); }}
+                style={{ width:50, height:50, borderRadius:"50%", background:"rgba(255,255,255,0.18)", border:"2.5px solid rgba(255,255,255,0.35)", display:"flex", alignItems:"center", justifyContent:"center", cursor:"pointer", padding:0, flexShrink:0 }}
+              >
+                {playing ? <PauseIcon size={20} /> : <PlayIcon size={20} />}
+              </button>
+            </div>
+          )}
+        </>
+      )}
     </div>
   );
 }
