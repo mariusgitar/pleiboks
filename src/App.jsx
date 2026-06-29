@@ -23,9 +23,8 @@ const NRK_SECTIONS = [
     id: "kokosbananas", label: "Kokosbananas", icon: "🥥",
     accent: "#B85A00", color: "#FFF0DC",
     items: [
-      { id: "l_810de249-e5d3-4a12-8de2-49e5d33a12d2", title: "Superdupersykkelen ", emoji: "🚲" },
-      { id: "l_cb5acb0d-1284-47d0-9acb-0d128447d0c2", title: "Melonhvalen", emoji: "🍉🐋" },
-      { id: "l_c1919e6d-7311-4cae-919e-6d7311dcae09", title: "Bråkebyrået", emoji: "🔊" },
+      { id: "l_810de249-e5d3-4a12-8de2-49e5d33a12d2", title: "Sykkelplanen", emoji: "🚲" },
+      { id: "l_21414849-4480-4ca2-8148-494480fca285", title: "Kokosbananas", emoji: "🍌" },
     ],
   },
   {
@@ -458,8 +457,13 @@ export default function App() {
   );
 
   const audioRef       = useRef(null);
-  const requestIdRef   = useRef(0);            // FIX 2: race condition guard
-  const lastProgressTs = useRef(0);            // FIX 1: throttle ref
+  const requestIdRef   = useRef(0);
+  const lastProgressTs = useRef(0);
+
+  // Spotify Web Playback SDK
+  const sdkPlayer   = useRef(null);
+  const sdkDeviceId = useRef(null);
+  const sdkReady    = useRef(false);
 
   const [nrkUrl, setNrkUrl]     = useState(null);
   const [progress, setProgress] = useState(0);
@@ -485,6 +489,8 @@ export default function App() {
   useEffect(() => {
     if (!auth?.accessToken) return;
     fetchSpotifyCovers(SPOTIFY_SECTION.items).then(setSpotifyCovers);
+    // Init Spotify SDK når bruker er innlogget
+    initSpotifySDK(auth.accessToken);
   }, [auth]);
 
   useEffect(() => {
@@ -515,6 +521,53 @@ export default function App() {
     audio.src = nrkUrl;
     audio.play().then(() => setPlaying(true)).catch(() => setPlaying(false));
   }, [nrkUrl]);
+
+  // Spotify Web Playback SDK init
+  function initSpotifySDK(initialToken) {
+    // Last SDK-script én gang
+    if (!document.querySelector('script[src*="spotify-player"]')) {
+      window.onSpotifyWebPlaybackSDKReady = () => createSDKPlayer(initialToken);
+      const s = document.createElement("script");
+      s.src = "https://sdk.scdn.co/spotify-player.js";
+      document.head.appendChild(s);
+    } else if (window.Spotify && !sdkPlayer.current) {
+      createSDKPlayer(initialToken);
+    }
+  }
+
+  function createSDKPlayer(initialToken) {
+    if (sdkPlayer.current) return; // allerede opprettet
+
+    const player = new window.Spotify.Player({
+      name: "Pleiboksen",
+      getOAuthToken: async (cb) => {
+        // Prøv refresh om token er gammelt
+        try {
+          await fetch("/api/refresh", { method: "POST" });
+        } catch {}
+        const fresh = await getMe();
+        cb(fresh?.accessToken || initialToken);
+      },
+      volume: 0.8,
+    });
+
+    player.addListener("ready", ({ device_id }) => {
+      sdkDeviceId.current = device_id;
+      sdkReady.current = true;
+    });
+    player.addListener("not_ready", () => {
+      sdkReady.current = false;
+    });
+    player.addListener("authentication_error", () => {
+      sdkReady.current = false;
+    });
+    player.addListener("account_error", () => {
+      sdkReady.current = false;
+    });
+
+    player.connect();
+    sdkPlayer.current = player;
+  }
 
   function stopAll() {
     const audio = audioRef.current;
@@ -548,9 +601,29 @@ export default function App() {
     setActiveItem({ ...track, cover: spotifyCovers[track.id] });
     setActiveSection(SPOTIFY_SECTION);
     setLoading(true);
-    setFullscreen(!isWide);  // FIX 3: ikke åpne fullskjerm på iPad
+    setFullscreen(!isWide);
+
+    // Vent maks 3 sek på SDK device_id
+    let waited = 0;
+    while (!sdkDeviceId.current && waited < 3000) {
+      await new Promise(r => setTimeout(r, 200));
+      waited += 200;
+    }
+
+    const deviceId = sdkDeviceId.current;
+
     try {
-      await spotifyPlay(track.uri, auth.accessToken);
+      // Bruk device_id om SDK er klar, ellers fallback
+      const url = deviceId
+        ? `/api/spotify-play?device_id=${deviceId}`
+        : `/api/spotify-play`;
+      const res = await fetch(url, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ trackUri: track.uri, accessToken: auth.accessToken }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "feil");
       setPlaying(true);
     } catch (e) {
       if (e.message === "no_device") { setPendingTrack(track); setShowVoksen(true); setFullscreen(false); }
@@ -570,9 +643,15 @@ export default function App() {
       if (!audio) return;
       if (playing) { audio.pause(); setPlaying(false); }
       else { audio.play().then(() => setPlaying(true)); }
-    } else if (source === "spotify" && auth?.accessToken) {
-      if (playing) { await spotifyPause(auth.accessToken); setPlaying(false); }
-      else { await spotifyPlay(activeItem.uri, auth.accessToken); setPlaying(true); }
+    } else if (source === "spotify") {
+      // Bruk SDK player.togglePlay() om tilgjengelig
+      if (sdkPlayer.current && sdkReady.current) {
+        await sdkPlayer.current.togglePlay();
+        setPlaying(p => !p);
+      } else if (auth?.accessToken) {
+        if (playing) { await spotifyPause(auth.accessToken); setPlaying(false); }
+        else { await spotifyPlay(activeItem.uri, auth.accessToken); setPlaying(true); }
+      }
     }
   }
 
