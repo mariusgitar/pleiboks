@@ -334,7 +334,7 @@ function PbCard({ item, section, isActive, playing, onClick }) {
     }}>
       <div style={{ width:"100%", aspectRatio:"1", background:section.color, display:"flex", alignItems:"center", justifyContent:"center", position:"relative", overflow:"hidden" }}>
         {item.cover && !err
-          ? <img src={item.cover} alt={item.title} onError={()=>setErr(true)} style={{ width:"100%", height:"100%", objectFit:fit, display:"block" }} />
+          ? <img src={item.cover} alt={item.title} onError={()=>setErr(true)} style={{ width:"100%", height:"100%", objectFit:"cover", display:"block" }} />
           : <span style={{ fontSize:42 }}>{item.emoji}</span>
         }
         {/* EQ-animasjon */}
