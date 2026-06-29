@@ -60,7 +60,7 @@
       try {
         // 1. Fetch
         log("Fetcher RSS...");
-        const res = await fetch(url);
+        const res = await fetch(`/api/rss?url=${encodeURIComponent(url)}`);
         log(`HTTP status: ${res.status} ${res.statusText}`, res.ok ? "ok" : "err");
 
         if (!res.ok) {
