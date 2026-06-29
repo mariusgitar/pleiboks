@@ -426,7 +426,7 @@ function ItemCard({ item, accent, sectionColor, isActive, playing, onSelect }) {
       </div>
       <div style={{ padding: "12px 14px 14px", display: "flex", alignItems: "center", gap: 12 }}>
         <div style={{ flex: 1 }}>
-          <div style={{ fontSize: 16, fontWeight: 900, color: "#1a1a1a", marginBottom: 2 }}>{item.title}</div>
+          <div style={{ fontSize: 16, fontWeight: 900, color: "#1a1a1a", marginBottom: 2 }}>{item.emoji} {item.title}</div>
           {item.artist && <div style={{ fontSize: 12, fontWeight: 700, color: "#bbb" }}>{item.artist}</div>}
         </div>
         <PlayBtn playing={isActive && playing} accent={accent} size={46} onClick={onSelect} />
@@ -673,29 +673,30 @@ export default function App() {
       {/* Mini-spiller */}
       {activeItem && !fullscreen && (
         <div style={{
-          position: "fixed", bottom: 0, left: "50%", transform: "translateX(-50%)",
-          width: "100%", maxWidth: 480,
+          position: "fixed", bottom: 12, left: "50%", transform: "translateX(-50%)",
+          width: "calc(100% - 24px)", maxWidth: 456,
           background: activeAccent,
-          padding: "10px 16px 28px",
+          borderRadius: 22,
+          padding: "12px 16px 14px",
           display: "flex", alignItems: "center", gap: 14,
-          boxShadow: "0 -4px 20px rgba(0,0,0,0.18)",
+          boxShadow: "0 8px 32px rgba(0,0,0,0.28)",
         }}>
           <Cover
             item={activeItem}
             sectionColor={activeSectionColor}
-            size={52} radius={12}
+            size={56} radius={14}
             playing={playing}
             onClick={() => setFullscreen(true)}
             mini={true}
           />
           <div style={{ flex: 1, minWidth: 0 }}>
-            <div style={{ color: "rgba(255,255,255,0.5)", fontSize: 10, fontWeight: 800 }}>Spiller nå</div>
+            <div style={{ color: "rgba(255,255,255,0.5)", fontSize: 10, fontWeight: 800, marginBottom: 2 }}>Spiller nå</div>
             <div style={{
               color: "#fff", fontWeight: 900, fontSize: 15,
               whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
-            }}>{activeItem.title}</div>
+            }}>{activeItem.emoji} {activeItem.title}</div>
           </div>
-          <PlayBtn playing={playing} accent={activeAccent} size={48} onClick={togglePlay} dark />
+          <PlayBtn playing={playing} accent={activeAccent} size={52} onClick={togglePlay} dark />
         </div>
       )}
     </div>
