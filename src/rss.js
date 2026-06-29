@@ -1,6 +1,12 @@
 // ── rss.js — RSS-parser og cache for Pleiboks ────────────────────
+// NRK blokkerer direktefetch fra nettleseren (CORS).
+// Vi ruter alle RSS-kall gjennom /api/rss?url=... (Vercel proxy).
 
 const CACHE_TTL_MS = 30 * 60 * 1000; // 30 min
+
+function proxyUrl(url) {
+  return `/api/rss?url=${encodeURIComponent(url)}`;
+}
 
 export async function fetchRssFeed(url) {
   const cacheKey = `rss_cache_${encodeURIComponent(url)}`;
@@ -13,8 +19,8 @@ export async function fetchRssFeed(url) {
     }
   } catch {}
 
-  const res = await fetch(url);
-  if (!res.ok) throw new Error(`RSS fetch feilet: ${res.status}`);
+  const res = await fetch(proxyUrl(url));
+  if (!res.ok) throw new Error(`RSS proxy feilet: ${res.status}`);
   const text = await res.text();
   const result = parseRss(text);
 
@@ -26,17 +32,19 @@ export async function fetchRssFeed(url) {
 }
 
 function parseRss(xmlText) {
-  // DOMParser håndterer ikke itunes:-namespace pålitelig i alle nettlesere.
-  // Løsning: strip namespace-prefixet før parsing, bruk deretter vanlig querySelector.
+  // Strip namespace-prefixer før parsing — DOMParser håndterer
+  // ikke itunes: pålitelig i Safari.
   const cleaned = xmlText
     .replace(/itunes:/g, "itunes_")
-    .replace(/media:/g,  "media_")
-    .replace(/dc:/g,     "dc_");
+    .replace(/media:/g, "media_")
+    .replace(/dc:/g, "dc_");
 
   const parser = new DOMParser();
   const doc = parser.parseFromString(cleaned, "text/xml");
 
-  // Serie-cover: prøv itunes_image href, deretter image/url
+  const parseErr = doc.querySelector("parsererror");
+  if (parseErr) throw new Error("XML parse-feil: " + parseErr.textContent.slice(0, 100));
+
   const channel = doc.querySelector("channel");
   const cover =
     channel?.querySelector("itunes_image")?.getAttribute("href") ||
@@ -54,12 +62,10 @@ function parseRss(xmlText) {
 
     const durationRaw =
       item.querySelector("itunes_duration")?.textContent?.trim() || "";
-    const duration = parseDuration(durationRaw);
 
     const pubDateStr = item.querySelector("pubDate")?.textContent?.trim();
     const pubDate = pubDateStr ? new Date(pubDateStr).toISOString() : null;
 
-    // Episodespesifikt cover (sjeldent i NRK, men støttes)
     const episodeCover =
       item.querySelector("itunes_image")?.getAttribute("href") || null;
 
@@ -67,9 +73,9 @@ function parseRss(xmlText) {
       id:       guid,
       title:    item.querySelector("title")?.textContent?.trim() || "Ukjent",
       audioUrl,
-      duration,
+      duration: parseDuration(durationRaw),
       pubDate,
-      cover: episodeCover || cover || null,
+      cover:    episodeCover || cover || null,
     };
   }).filter(ep => ep.audioUrl);
 
@@ -89,7 +95,6 @@ export async function fetchRssAudioUrl(rssUrl, episodeTitle) {
   const { items } = await fetchRssFeed(rssUrl);
   const lower = episodeTitle.toLowerCase();
 
-  // Prøv eksakt match først, deretter delvis
   const ep =
     items.find(e => e.title.toLowerCase() === lower) ||
     items.find(e => e.title.toLowerCase().includes(lower)) ||
