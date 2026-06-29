@@ -256,6 +256,17 @@ function SkyBg() {
 // ── Spotify voksen-modal ──────────────────────────────────────────
 function SpotifyVoksenModal({ onRetry, onDismiss }) {
   const [showGuide, setShowGuide] = useState(false);
+  const [reconnecting, setReconnecting] = useState(false);
+
+  async function handleReconnect() {
+    setReconnecting(true);
+    try {
+      await fetch("/api/refresh", { method: "POST" });
+    } catch {}
+    // Tving ny innlogging — sender til Spotify OAuth
+    window.location.href = "/api/login";
+  }
+
   return (
     <div style={{ position:"fixed", inset:0, zIndex:200, background:"rgba(0,0,0,0.5)", display:"flex", alignItems:"flex-end", fontFamily:"'Nunito',system-ui,sans-serif" }} onClick={onDismiss}>
       <div onClick={(e)=>e.stopPropagation()} style={{ background:"#fff", width:"100%", borderRadius:"20px 20px 0 0", padding:"24px 24px 40px", maxHeight:"85vh", overflowY:"auto" }}>
@@ -264,11 +275,13 @@ function SpotifyVoksenModal({ onRetry, onDismiss }) {
           <h2 style={{ fontWeight:900, color:"#1B4D5C", fontSize:22, margin:"0 0 8px" }}>Musikken er ikke klar!</h2>
           <p style={{ color:"#555", fontWeight:700, fontSize:15, margin:0 }}>Hent en voksen — de vet hva de skal gjøre 😊</p>
         </div>
-        <button onClick={()=>setShowGuide(!showGuide)} style={{ display:"block", width:"100%", background:"none", border:"2px solid #1B4D5C", borderRadius:12, padding:"10px 20px", color:"#1B4D5C", fontWeight:800, fontSize:14, cursor:"pointer", marginBottom:16, fontFamily:"inherit" }}>
+
+        <button onClick={()=>setShowGuide(!showGuide)} style={{ display:"block", width:"100%", background:"none", border:"2px solid #1B4D5C", borderRadius:12, padding:"10px 20px", color:"#1B4D5C", fontWeight:800, fontSize:14, cursor:"pointer", marginBottom:12, fontFamily:"inherit" }}>
           {showGuide ? "Skjul guide" : "👨‍👩‍👧 Voksenguide"}
         </button>
+
         {showGuide && (
-          <div style={{ background:"#f8f8f8", borderRadius:16, padding:"16px 20px", marginBottom:16 }}>
+          <div style={{ background:"#f8f8f8", borderRadius:16, padding:"16px 20px", marginBottom:12 }}>
             {["Åpne Spotify-appen på denne iPaden","Spill en hvilken som helst sang i noen sekunder","Gå tilbake til denne appen",'Trykk "Prøv igjen" nedenfor'].map((step,i)=>(
               <div key={i} style={{ display:"flex", gap:10, alignItems:"flex-start", marginBottom:8 }}>
                 <div style={{ width:24, height:24, borderRadius:"50%", background:"#F5C842", display:"flex", alignItems:"center", justifyContent:"center", fontWeight:900, fontSize:12, flexShrink:0, color:"#1B4D5C" }}>{i+1}</div>
@@ -277,6 +290,16 @@ function SpotifyVoksenModal({ onRetry, onDismiss }) {
             ))}
           </div>
         )}
+
+        {/* Koble til på nytt — tving ny OAuth-login */}
+        <button
+          onClick={handleReconnect}
+          disabled={reconnecting}
+          style={{ display:"block", width:"100%", background:"none", border:"2px solid #aaa", borderRadius:12, padding:"10px 20px", color:"#666", fontWeight:800, fontSize:13, cursor:"pointer", marginBottom:12, fontFamily:"inherit" }}
+        >
+          {reconnecting ? "Kobler til…" : "🔄 Koble appen til Spotify på nytt"}
+        </button>
+
         <div style={{ display:"flex", gap:10 }}>
           <button onClick={onDismiss} style={{ flex:1, background:"#fff", color:"#1B4D5C", border:"2px solid #1B4D5C", borderRadius:14, padding:"12px", fontWeight:900, fontSize:15, cursor:"pointer", fontFamily:"inherit" }}>Avbryt</button>
           <button onClick={onRetry} style={{ flex:2, background:"#1B4D5C", color:"#fff", border:"none", borderRadius:14, padding:"12px", fontWeight:900, fontSize:15, cursor:"pointer", fontFamily:"inherit" }}>Prøv igjen</button>
@@ -509,31 +532,38 @@ export default function App() {
   }, []);
 
   useEffect(() => {
-    // Last covers: RSS-seksjoner henter cover fra feeden,
-    // API-seksjoner bruker psapi via fetchNrkCover
     async function loadAllCovers() {
       const map = {};
 
+      // Cache RSS-feeds så vi ikke fetcher samme feed flere ganger
+      // (f.eks. musikk_fra_nrk_super brukes av tre seksjoner)
+      const feedCache = {};
+      async function getFeed(url) {
+        if (!feedCache[url]) feedCache[url] = fetchRssFeed(url);
+        return feedCache[url];
+      }
+
       await Promise.all(NRK_SECTIONS.map(async (section) => {
         if (section.source === "rss" && section.rssUrl) {
-          // RSS: hent én cover per seksjon fra feed-headeren,
-          // bruk samme cover for alle episoder i seksjonen
           try {
-            const { cover, items: feedItems } = await fetchRssFeed(section.rssUrl);
-            const sectionCover = cover || null;
+            const { cover: sectionCover, items: feedItems } = await getFeed(section.rssUrl);
 
             section.items.forEach(item => {
-              // Prøv episodespesifikt cover, fall tilbake til serie-cover
-              const feedEp = feedItems.find(
-                ep => ep.title.toLowerCase().includes(item.title.toLowerCase().slice(0, 12))
-              );
+              // Finn episode i feed ved eksakt eller delvis tittel-match
+              const titleLower = item.title.toLowerCase();
+              const feedEp =
+                feedItems.find(ep => ep.title.toLowerCase() === titleLower) ||
+                feedItems.find(ep => ep.title.toLowerCase().includes(titleLower)) ||
+                feedItems.find(ep => titleLower.includes(ep.title.toLowerCase()));
+
+              // Episodespesifikt cover > serie-cover fra feed-header
               map[item.id] = feedEp?.cover || sectionCover || null;
             });
           } catch (e) {
             console.warn("RSS cover-feil:", section.id, e.message);
           }
         } else {
-          // API: hent cover per episode via psapi
+          // API: psapi via Vercel proxy (Karsten og Petra)
           await Promise.all(section.items.map(async (item) => {
             const url = await fetchNrkCover(item.id, item.programType);
             if (url) map[item.id] = url;
