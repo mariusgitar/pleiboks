@@ -23,8 +23,9 @@ const NRK_SECTIONS = [
     id: "kokosbananas", label: "Kokosbananas", icon: "🥥",
     accent: "#B85A00", color: "#FFF0DC",
     items: [
-      { id: "l_810de249-e5d3-4a12-8de2-49e5d33a12d2", title: "Sykkelplanen", emoji: "🚲" },
-      { id: "l_21414849-4480-4ca2-8148-494480fca285", title: "Kokosbananas", emoji: "🍌" },
+      { id: "l_810de249-e5d3-4a12-8de2-49e5d33a12d2", title: "Superdupersykkelen ", emoji: "🚲" },
+      { id: "l_cb5acb0d-1284-47d0-9acb-0d128447d0c2", title: "Melonhvalen", emoji: "🍉🐋" },
+      { id: "l_c1919e6d-7311-4cae-919e-6d7311dcae09", title: "Bråkebyrået", emoji: "🔊" },
     ],
   },
   {
