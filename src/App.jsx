@@ -106,6 +106,8 @@ const NRK_SECTIONS = [
   },
 ];
 
+const SHOW_SPOTIFY = false;
+
 const SPOTIFY_SECTION = {
   id: "spotify", label: "Musikk", icon: "🎵",
   accent: "#6D28D9", color: "#EDE8FF",
@@ -488,7 +490,7 @@ export default function App() {
   }, []);
 
   useEffect(() => {
-    if (!auth?.accessToken) return;
+    if (!SHOW_SPOTIFY || !auth?.accessToken) return;
     fetchSpotifyCovers(SPOTIFY_SECTION.items).then(setSpotifyCovers);
     // Init Spotify SDK når bruker er innlogget
     initSpotifySDK(auth.accessToken);
@@ -659,7 +661,9 @@ export default function App() {
   function getFlattened() {
     const all = [];
     NRK_SECTIONS.forEach(s => s.items.forEach(item => all.push({ item, section: s, type: "nrk" })));
-    SPOTIFY_SECTION.items.forEach(item => all.push({ item, section: SPOTIFY_SECTION, type: "spotify" }));
+    if (SHOW_SPOTIFY) {
+      SPOTIFY_SECTION.items.forEach(item => all.push({ item, section: SPOTIFY_SECTION, type: "spotify" }));
+    }
     return all;
   }
   function navigate(dir) {
@@ -717,8 +721,12 @@ export default function App() {
             {NRK_SECTIONS.map((section) => (
               <PbSection key={section.id} section={section} covers={nrkCovers} activeId={activeItem?.id} activeSource={source} playing={playing} onSelect={(item) => velgNrkCb(item, section)} />
             ))}
-            <PbSection section={SPOTIFY_SECTION} covers={spotifyCovers} activeId={activeItem?.id} activeSource={source} playing={playing} onSelect={velgSpotifyCb} />
-            {!auth?.loggedIn && <p style={{ color:"#888", fontSize:"0.75rem", fontWeight:700, textAlign:"center", marginTop:-4, marginBottom:12 }}>🔒 Trykk på en Kutoppen-sang for å koble til Spotify</p>}
+            {SHOW_SPOTIFY && (
+              <PbSection section={SPOTIFY_SECTION} covers={spotifyCovers} activeId={activeItem?.id} activeSource={source} playing={playing} onSelect={velgSpotifyCb} />
+            )}
+            {SHOW_SPOTIFY && !auth?.loggedIn && (
+              <p style={{ color:"#888", fontSize:"0.75rem", fontWeight:700, textAlign:"center", marginTop:-4, marginBottom:12 }}>🔒 Trykk på en sang for å koble til Spotify</p>
+            )}
           </div>
         </div>
       ) : (
@@ -737,8 +745,12 @@ export default function App() {
               {NRK_SECTIONS.map((section) => (
                 <PbSection key={section.id} section={section} covers={nrkCovers} activeId={activeItem?.id} activeSource={source} playing={playing} onSelect={(item) => velgNrkCb(item, section)} />
               ))}
+              {SHOW_SPOTIFY && (
               <PbSection section={SPOTIFY_SECTION} covers={spotifyCovers} activeId={activeItem?.id} activeSource={source} playing={playing} onSelect={velgSpotifyCb} />
-              {!auth?.loggedIn && <p style={{ color:"#888", fontSize:"0.75rem", fontWeight:700, textAlign:"center", marginTop:-4, marginBottom:12 }}>🔒 Trykk på en Kutoppen-sang for å koble til Spotify</p>}
+            )}
+              {SHOW_SPOTIFY && !auth?.loggedIn && (
+              <p style={{ color:"#888", fontSize:"0.75rem", fontWeight:700, textAlign:"center", marginTop:-4, marginBottom:12 }}>🔒 Trykk på en sang for å koble til Spotify</p>
+            )}
             </div>
           </div>
           {activeItem && !fullscreen && (
