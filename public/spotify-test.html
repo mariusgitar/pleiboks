@@ -1,0 +1,211 @@
+<!DOCTYPE html>
+<html lang="no">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Spotify SDK Spike</title>
+  <style>
+    body { font-family: system-ui; padding: 24px; background: #1a1a2e; color: #fff; max-width: 480px; margin: 0 auto; }
+    h2 { margin-bottom: 8px; }
+    .status { background: #16213e; border-radius: 12px; padding: 16px; margin: 16px 0; font-size: 14px; line-height: 1.6; }
+    .status b { color: #4D96FF; }
+    button {
+      display: block; width: 100%; padding: 18px;
+      background: #1DB954; color: #fff; border: none; border-radius: 14px;
+      font-size: 18px; font-weight: 800; cursor: pointer; margin: 12px 0;
+    }
+    button:disabled { background: #333; color: #666; cursor: default; }
+    button.secondary { background: #333; font-size: 15px; padding: 14px; }
+    .log { background: #0f0f1a; border-radius: 8px; padding: 12px; font-size: 12px; font-family: monospace; max-height: 200px; overflow-y: auto; margin-top: 16px; }
+    .log div { padding: 2px 0; border-bottom: 1px solid #222; }
+    .log .ok  { color: #1DB954; }
+    .log .err { color: #FF6B6B; }
+    .log .inf { color: #aaa; }
+  </style>
+</head>
+<body>
+  <h2>🎵 Spotify SDK Spike</h2>
+  <p style="opacity:0.6;font-size:13px">Test Web Playback SDK på denne enheten</p>
+
+  <div class="status" id="status">
+    <b>Status:</b> Ikke startet<br>
+    <b>Device ID:</b> —<br>
+    <b>Innlogget:</b> —
+  </div>
+
+  <button id="btn-login">1. Logg inn med Spotify</button>
+  <button id="btn-init" disabled>2. Start Pleiboksen-enhet</button>
+  <button id="btn-play" disabled>3. Spill Milkshake 🥤</button>
+  <button id="btn-pause" class="secondary" disabled>⏸ Pause</button>
+
+  <div class="log" id="log"></div>
+
+  <script>
+    const TRACK_URI = "spotify:track:1SMtaNiuQHnLXDB03mEAY3"; // Milkshake
+    let player = null;
+    let deviceId = null;
+    let accessToken = null;
+
+    function log(msg, type = "inf") {
+      const el = document.getElementById("log");
+      const div = document.createElement("div");
+      div.className = type;
+      div.textContent = new Date().toLocaleTimeString() + " — " + msg;
+      el.prepend(div);
+    }
+
+    function setStatus(updates) {
+      const el = document.getElementById("status");
+      const current = {};
+      el.querySelectorAll("b").forEach(b => {
+        current[b.textContent.replace(":", "")] = b.nextSibling?.textContent?.trim();
+      });
+      Object.assign(current, updates);
+      el.innerHTML = Object.entries(current).map(([k, v]) => `<b>${k}:</b> ${v}`).join("<br>");
+    }
+
+    // Hent access token fra Pleiboks-backend
+    async function getToken() {
+      try {
+        const res = await fetch("/api/me");
+        if (!res.ok) return null;
+        const data = await res.json();
+        return data?.accessToken || null;
+      } catch { return null; }
+    }
+
+    // Sjekk innlogging
+    async function checkAuth() {
+      accessToken = await getToken();
+      if (accessToken) {
+        log("Token hentet fra /api/me ✓", "ok");
+        setStatus({ "Innlogget": "Ja ✓" });
+        document.getElementById("btn-init").disabled = false;
+      } else {
+        log("Ikke innlogget — trenger Spotify-login", "err");
+        setStatus({ "Innlogget": "Nei" });
+      }
+    }
+
+    document.getElementById("btn-login").addEventListener("click", () => {
+      window.location.href = "/api/login";
+    });
+
+    document.getElementById("btn-init").addEventListener("click", async () => {
+      log("Laster Spotify Web Playback SDK...", "inf");
+      document.getElementById("btn-init").disabled = true;
+
+      // Last SDK dynamisk
+      const script = document.createElement("script");
+      script.src = "https://sdk.scdn.co/spotify-player.js";
+      document.head.appendChild(script);
+
+      window.onSpotifyWebPlaybackSDKReady = () => {
+        log("SDK lastet ✓", "ok");
+
+        player = new Spotify.Player({
+          name: "Pleiboksen",
+          getOAuthToken: async (cb) => {
+            // Refresh token om nødvendig
+            accessToken = await getToken();
+            if (!accessToken) {
+              // Prøv refresh
+              try {
+                await fetch("/api/refresh", { method: "POST" });
+                accessToken = await getToken();
+              } catch {}
+            }
+            log("Token levert til SDK", "inf");
+            cb(accessToken);
+          },
+          volume: 0.8,
+        });
+
+        // Feil
+        player.addListener("initialization_error", ({ message }) => {
+          log("SDK init-feil: " + message, "err");
+        });
+        player.addListener("authentication_error", ({ message }) => {
+          log("SDK auth-feil: " + message, "err");
+          setStatus({ "Status": "Auth-feil — prøv å logge inn igjen" });
+        });
+        player.addListener("account_error", ({ message }) => {
+          log("SDK konto-feil (krever Premium?): " + message, "err");
+          setStatus({ "Status": "Konto-feil — Premium påkrevd" });
+        });
+        player.addListener("playback_error", ({ message }) => {
+          log("Avspillingsfeil: " + message, "err");
+        });
+
+        // Klar
+        player.addListener("ready", ({ device_id }) => {
+          deviceId = device_id;
+          log("Enhet klar! Device ID: " + device_id, "ok");
+          setStatus({ "Status": "Klar ✓", "Device ID": device_id.substring(0, 16) + "..." });
+          document.getElementById("btn-play").disabled = false;
+        });
+
+        player.addListener("not_ready", ({ device_id }) => {
+          log("Enhet ikke tilgjengelig: " + device_id, "err");
+        });
+
+        player.addListener("player_state_changed", (state) => {
+          if (!state) return;
+          const track = state.track_window?.current_track;
+          if (track) {
+            log(`Spiller: ${track.name} — ${track.artists.map(a=>a.name).join(", ")}`, "ok");
+            setStatus({ "Status": state.paused ? "Pauset ⏸" : "Spiller ▶ " + track.name });
+          }
+          document.getElementById("btn-pause").disabled = false;
+        });
+
+        // Koble til
+        player.connect().then(success => {
+          if (success) {
+            log("Koblet til Spotify Connect ✓", "ok");
+            setStatus({ "Status": "Kobler til..." });
+          } else {
+            log("Tilkobling feilet", "err");
+          }
+        });
+      };
+    });
+
+    // Play-knapp — MÅ kalles direkte fra onclick (iOS-krav)
+    document.getElementById("btn-play").addEventListener("click", async () => {
+      if (!deviceId || !accessToken) {
+        log("Ingen device_id eller token", "err");
+        return;
+      }
+      log("Sender play til device: " + deviceId.substring(0, 16) + "...", "inf");
+      try {
+        const res = await fetch(`https://api.spotify.com/v1/me/player/play?device_id=${deviceId}`, {
+          method: "PUT",
+          headers: {
+            "Authorization": "Bearer " + accessToken,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({ uris: [TRACK_URI] }),
+        });
+        if (res.ok || res.status === 204) {
+          log("Play sendt ✓", "ok");
+        } else {
+          const err = await res.json().catch(() => ({}));
+          log("Play feilet: " + res.status + " " + JSON.stringify(err), "err");
+        }
+      } catch (e) {
+        log("Play-feil: " + e.message, "err");
+      }
+    });
+
+    document.getElementById("btn-pause").addEventListener("click", () => {
+      if (player) {
+        player.togglePlay().then(() => log("Toggle play/pause", "inf"));
+      }
+    });
+
+    // Init
+    checkAuth();
+  </script>
+</body>
+</html>
