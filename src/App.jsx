@@ -10,16 +10,11 @@ import { fetchRssFeed, fetchRssAudioUrl, fetchRssCover } from "./rss.js";
 const RSS = {
   halloBablo:             "https://podkast.nrk.no/program/hallo_bablo.rss",
   kokosbananas:           "https://podkast.nrk.no/program/kokosbananas.rss",
-  // Fantorangen-episoder (Kjempe-Fantus, Fantus forsvinn etc.) ligger i fantorangenfortellinger
+  // Fantorangen og Fantorangenfortellinger er samme feed
   fantorangenfortellinger:"https://podkast.nrk.no/program/fantorangenfortellinger.rss",
-  fantorangensVitseshow:  "https://podkast.nrk.no/program/fantorangens_vitseshow.rss",
-  // BlimE, Fantus musikantus og Fantorangens verden er sesonger under musikk_fra_nrk_super
-  // men musikk_fra_nrk_super.rss gir 404 — bruk sesong-spesifikke feeds
-  blime:                  "https://podkast.nrk.no/program/blime.rss",
-  fantusMusikantus:       "https://podkast.nrk.no/program/fantus_musikantus.rss",
-  fantorangensVerden:     "https://podkast.nrk.no/program/fantorangens_verden.rss",
   brannbamsenBjornis:     "https://podkast.nrk.no/program/brannbamsen_bjoernis.rss",
-  billisOgBollos:         "https://podkast.nrk.no/program/billis_og_bollos.rss",
+  // BlimE, Fantus musikantus, Fantorangens verden har ikke egne RSS-feeds —
+  // disse bruker psapi-IDer (source: "api")
 };
 
 const NRK_SECTIONS = [
@@ -52,13 +47,15 @@ const NRK_SECTIONS = [
     ],
   },
   {
+    // Kjempe-Fantus, Fantus forsvinn etc. er fra 2024 og kan falle ut av RSS-feed.
+    // Bruker psapi-IDer for pålitelig avspilling.
     id: "fantorangen", label: "Fantorangen", icon: "🧡",
     accent: "#D4700A", color: "#FFF3DC",
-    source: "rss", rssUrl: RSS.fantorangenfortellinger,
+    source: "api",
     items: [
-      { id: "fan-kjempe",      title: "Kjempe-Fantus",   emoji: "🌳", source: "rss" },
-      { id: "fan-forsvinn",    title: "Fantus forsvinn",  emoji: "📺", source: "rss" },
-      { id: "fan-tryllerydding",title: "Tryllerydding",  emoji: "🪄", source: "rss" },
+      { id: "l_8e42fb20-bb6f-404c-82fb-20bb6f004c5f", title: "Kjempe-Fantus",   emoji: "🌳", source: "api" },
+      { id: "l_01779e9e-49ad-41ff-b79e-9e49ad11ffc0", title: "Fantus forsvinn",  emoji: "📺", source: "api" },
+      { id: "l_9124669c-0fc4-4660-a466-9c0fc4b6609a", title: "Tryllerydding",    emoji: "🪄", source: "api" },
     ],
   },
   {
@@ -84,44 +81,43 @@ const NRK_SECTIONS = [
     ],
   },
   {
-    // BlimE! henter fra musikk_fra_nrk_super — episodene filtreres på tittel
     id: "blime", label: "BlimE!", icon: "🌈",
     accent: "#4f46e5", color: "#EDE8FF",
-    source: "rss", rssUrl: RSS.blime,
+    source: "api",
     items: [
-      { id: "bl-kom-igjen",    title: "Kom igjen 'a",  emoji: "🎤", source: "rss" },
-      { id: "bl-halloween",    title: "Halloween",     emoji: "🎃", source: "rss" },
-      { id: "bl-kua-mi",       title: "Kua mi",        emoji: "🐄", source: "rss" },
-      { id: "bl-ferdig",       title: "Ferdig snakka", emoji: "🤫", source: "rss" },
-      { id: "bl-vaere-med",    title: "Være med",      emoji: "🙌", source: "rss" },
-      { id: "bl-sveve-hoyt",   title: "Sveve høyt",    emoji: "🪁", source: "rss" },
-      { id: "bl-dynamitt",     title: "Dynamitt",      emoji: "💥", source: "rss" },
-      { id: "bl-ser-deg",      title: "Ser deg",       emoji: "👀", source: "rss" },
+      { id: "l_bd313b9d-5f6b-44a1-b13b-9d5f6b84a16b", title: "Kom igjen 'a",  emoji: "🎤", source: "api" },
+      { id: "l_2ae9578e-b9ef-4451-a957-8eb9ef0451f2", title: "Halloween",     emoji: "🎃", source: "api" },
+      { id: "l_184d0d69-e4ba-4316-8d0d-69e4bad3165a", title: "Kua mi",        emoji: "🐄", source: "api" },
+      { id: "l_227c72ee-f0d8-477e-bc72-eef0d8877e3e", title: "Ferdig snakka", emoji: "🤫", source: "api" },
+      { id: "l_ee431198-066e-4814-8311-98066e98148b", title: "Være med",      emoji: "🙌", source: "api" },
+      { id: "l_ff643c27-b82e-44bd-a43c-27b82e34bd5f", title: "Sveve høyt",    emoji: "🪁", source: "api" },
+      { id: "l_2a2d7975-67b3-48e2-ad79-7567b3c8e2ba", title: "Dynamitt",      emoji: "💥", source: "api" },
+      { id: "l_d8d2e266-5ed9-41e0-92e2-665ed9b1e074", title: "Ser deg",       emoji: "👀", source: "api" },
     ],
   },
   {
     id: "fantus-musikantus", label: "Fantus musikantus", icon: "🎹",
     accent: "#D4700A", color: "#FFF3DC",
-    source: "rss", rssUrl: RSS.fantusMusikantus,
+    source: "api",
     items: [
-      { id: "fm-hjulene",    title: "Hjulene på bussen", emoji: "🚌", source: "rss" },
-      { id: "fm-ma-me-mo",   title: "Ma me mo",          emoji: "🎵", source: "rss" },
-      { id: "fm-eggesangen", title: "Eggesangen",        emoji: "🥚", source: "rss" },
-      { id: "fm-fader-jakob",title: "Fader Jakob",       emoji: "🔔", source: "rss" },
-      { id: "fm-klappe",     title: "Klappesangen",      emoji: "👏", source: "rss" },
+      { id: "l_25663b06-aad8-4b84-a63b-06aad84b841a", title: "Hjulene på bussen", emoji: "🚌", source: "api" },
+      { id: "l_704cb2d9-785e-4907-8cb2-d9785e490790", title: "Ma me mo",          emoji: "🎵", source: "api" },
+      { id: "l_7514e801-f102-40bf-94e8-01f10200bffb", title: "Eggesangen",        emoji: "🥚", source: "api" },
+      { id: "l_d121604d-3d7f-4c8c-a160-4d3d7f9c8cc9", title: "Fader Jakob",       emoji: "🔔", source: "api" },
+      { id: "l_a0ef8d4a-c61d-4009-af8d-4ac61d3009ad", title: "Klappesangen",      emoji: "👏", source: "api" },
     ],
   },
   {
     id: "musikk-fantorangens-verden", label: "Fantorangens verden", icon: "🎶",
     accent: "#D4700A", color: "#FFF3DC",
-    source: "rss", rssUrl: RSS.fantorangensVerden,
+    source: "api",
     items: [
-      { id: "fv-snibel",      title: "Snibel Snabel",   emoji: "🐘", source: "rss" },
-      { id: "fv-tannpuss",    title: "Tannpussesangen", emoji: "🪥", source: "rss" },
-      { id: "fv-sjobanan",    title: "Sjøbanan",        emoji: "🍌", source: "rss" },
-      { id: "fv-ryddesang",   title: "Ryddesang",       emoji: "🧹", source: "rss" },
-      { id: "fv-tallsangen",  title: "Tallsangen",      emoji: "🔢", source: "rss" },
-      { id: "fv-baesjesangen",title: "Bæsjesangen",     emoji: "💩", source: "rss" },
+      { id: "l_b34a81e1-a911-4824-8a81-e1a9118824e2", title: "Snibel Snabel",   emoji: "🐘", source: "api" },
+      { id: "l_d2c4eeae-55c8-4cfc-84ee-ae55c80cfc0d", title: "Tannpussesangen", emoji: "🪥", source: "api" },
+      { id: "l_08f018af-0656-48dd-b018-af065638ddd4", title: "Sjøbanan",        emoji: "🍌", source: "api" },
+      { id: "l_6c29c28c-69a1-43ef-a9c2-8c69a1b3efab", title: "Ryddesang",       emoji: "🧹", source: "api" },
+      { id: "l_5e1b5f7f-abe9-4c8a-9b5f-7fabe9bc8a9f", title: "Tallsangen",      emoji: "🔢", source: "api" },
+      { id: "l_7733df85-6d87-4e44-b3df-856d876e44cb", title: "Bæsjesangen",     emoji: "💩", source: "api" },
     ],
   },
   {
