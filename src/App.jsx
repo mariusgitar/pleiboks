@@ -106,7 +106,7 @@ const NRK_SECTIONS = [
   },
 ];
 
-const SHOW_SPOTIFY = false;
+const SHOW_SPOTIFY = true;
 
 const SPOTIFY_SECTION = {
   id: "spotify", label: "Musikk", icon: "🎵",
