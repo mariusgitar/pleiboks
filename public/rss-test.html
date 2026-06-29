@@ -1,0 +1,156 @@
+<!DOCTYPE html>
+<html lang="no">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>RSS Debug</title>
+  <style>
+    body { font-family: system-ui; padding: 20px; background: #111; color: #fff; max-width: 600px; margin: 0 auto; }
+    button { padding: 14px 20px; background: #1DB954; color: #fff; border: none; border-radius: 10px; font-size: 15px; font-weight: 800; cursor: pointer; margin: 6px 4px; }
+    button.sec { background: #333; font-size: 13px; padding: 10px 14px; }
+    .box { background: #1a1a2e; border-radius: 10px; padding: 14px; margin: 10px 0; font-size: 12px; line-height: 1.7; word-break: break-all; }
+    .log { background: #0a0a0a; border-radius: 8px; padding: 10px; font-size: 11px; font-family: monospace; max-height: 500px; overflow-y: auto; }
+    .ok { color: #1DB954; } .err { color: #FF6B6B; } .inf { color: #aaa; } .warn { color: #FFD93D; }
+    img { width: 80px; height: 80px; border-radius: 8px; object-fit: cover; margin: 4px; vertical-align: middle; }
+  </style>
+</head>
+<body>
+  <h2>📡 RSS Debug</h2>
+
+  <div>
+    <button onclick="testFeed('https://podkast.nrk.no/program/hallo_bablo.rss', 'Hallo Bablo')">Hallo Bablo</button>
+    <button onclick="testFeed('https://podkast.nrk.no/program/kokosbananas.rss', 'Kokosbananas')">Kokosbananas</button>
+    <button onclick="testFeed('https://podkast.nrk.no/program/fantorangen.rss', 'Fantorangen')">Fantorangen</button>
+    <button onclick="testFeed('https://podkast.nrk.no/program/fantorangenfortellinger.rss', 'Fantorangenfortellinger')">Fantorangenfortellinger</button>
+    <button onclick="testFeed('https://podkast.nrk.no/program/musikk_fra_nrk_super.rss', 'Musikk NRK Super')">Musikk NRK Super</button>
+    <button onclick="testFeed('https://podkast.nrk.no/program/brannbamsen_bjoernis.rss', 'Bjørnis')">Bjørnis</button>
+  </div>
+
+  <div style="margin-top: 12px;">
+    <button class="sec" onclick="testEpisode()">🎵 Test avspilling av første episode</button>
+    <button class="sec" onclick="clearLog()">Tøm logg</button>
+  </div>
+
+  <div class="box" id="result">Trykk en feed-knapp for å teste</div>
+  <div class="log" id="log"></div>
+
+  <audio id="player" controls style="width:100%; margin-top:12px; display:none;"></audio>
+
+  <script>
+    let lastFeedData = null;
+
+    function log(msg, t = "inf") {
+      const el = document.getElementById("log");
+      const d = document.createElement("div");
+      d.className = t;
+      d.textContent = new Date().toLocaleTimeString("no") + " " + msg;
+      el.prepend(d);
+    }
+
+    function clearLog() {
+      document.getElementById("log").innerHTML = "";
+      document.getElementById("result").textContent = "Tømt";
+    }
+
+    async function testFeed(url, name) {
+      log(`=== Tester: ${name} ===`, "warn");
+      log(`URL: ${url}`);
+      document.getElementById("result").textContent = `Henter ${name}...`;
+
+      try {
+        // 1. Fetch
+        log("Fetcher RSS...");
+        const res = await fetch(url);
+        log(`HTTP status: ${res.status} ${res.statusText}`, res.ok ? "ok" : "err");
+
+        if (!res.ok) {
+          document.getElementById("result").textContent = `❌ HTTP ${res.status}`;
+          return;
+        }
+
+        const text = await res.text();
+        log(`Mottok ${text.length} tegn`, "ok");
+
+        // 2. Vis rå XML-topp
+        log("--- Rå XML (første 500 tegn) ---", "warn");
+        log(text.substring(0, 500));
+
+        // 3. Parse med namespace-strip
+        const cleaned = text.replace(/itunes:/g, "itunes_").replace(/media:/g, "media_");
+        const parser = new DOMParser();
+        const doc = parser.parseFromString(cleaned, "text/xml");
+
+        // Sjekk for parse-feil
+        const parseErr = doc.querySelector("parsererror");
+        if (parseErr) {
+          log("XML parse-feil: " + parseErr.textContent.substring(0, 200), "err");
+        } else {
+          log("XML parset OK", "ok");
+        }
+
+        // 4. Finn cover
+        const channel = doc.querySelector("channel");
+        const itunesImg = channel?.querySelector("itunes_image")?.getAttribute("href");
+        const imageUrl = channel?.querySelector("image > url")?.textContent?.trim();
+        const cover = itunesImg || imageUrl || null;
+
+        log(`itunes_image href: ${itunesImg || "IKKE FUNNET"}`, itunesImg ? "ok" : "warn");
+        log(`image > url: ${imageUrl || "IKKE FUNNET"}`, imageUrl ? "ok" : "warn");
+        log(`Cover brukt: ${cover || "INGEN"}`, cover ? "ok" : "err");
+
+        // 5. Tell episoder og vis første tre
+        const items = Array.from(doc.querySelectorAll("item"));
+        log(`Antall episoder: ${items.length}`, items.length > 0 ? "ok" : "err");
+
+        const episodes = items.slice(0, 5).map(item => {
+          const enc = item.querySelector("enclosure");
+          return {
+            title: item.querySelector("title")?.textContent?.trim(),
+            audioUrl: enc?.getAttribute("url"),
+            type: enc?.getAttribute("type"),
+            duration: item.querySelector("itunes_duration")?.textContent?.trim(),
+          };
+        });
+
+        log("--- Første 5 episoder ---", "warn");
+        episodes.forEach((ep, i) => {
+          log(`${i+1}. "${ep.title}"`);
+          log(`   Audio: ${ep.audioUrl?.substring(0, 80) || "INGEN"}`, ep.audioUrl ? "ok" : "err");
+          log(`   Type: ${ep.type || "?"} | Varighet: ${ep.duration || "?"}`);
+        });
+
+        lastFeedData = { episodes, cover, name };
+
+        // 6. Vis resultat med cover
+        const resultEl = document.getElementById("result");
+        resultEl.innerHTML = `
+          <b>${name}</b> — ${items.length} episoder<br>
+          Cover: ${cover ? `<img src="${cover}" onerror="this.style.display='none';this.nextSibling.textContent='(bilde lastet ikke)'">` : "❌ Ingen"}<span></span><br>
+          ${episodes.map(ep => `• ${ep.title || "?"}: ${ep.audioUrl ? "✅ Har lyd" : "❌ Ingen lyd"}`).join("<br>")}
+        `;
+
+      } catch(e) {
+        log(`Feil: ${e.message}`, "err");
+        log(e.stack, "err");
+        document.getElementById("result").textContent = `❌ ${e.message}`;
+      }
+    }
+
+    function testEpisode() {
+      if (!lastFeedData?.episodes?.[0]?.audioUrl) {
+        log("Ingen feed lastet ennå — trykk en feed-knapp først", "warn");
+        return;
+      }
+      const ep = lastFeedData.episodes[0];
+      log(`Prøver å spille: ${ep.title}`);
+      log(`URL: ${ep.audioUrl}`);
+      const player = document.getElementById("player");
+      player.style.display = "block";
+      player.src = ep.audioUrl;
+      player.play()
+        .then(() => log("Avspilling startet ✓", "ok"))
+        .catch(e => log("Avspillingsfeil: " + e.message, "err"));
+    }
+  </script>
+</body>
+</html>
