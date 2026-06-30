@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef, memo, useCallback } from "react";
 import { fetchRssFeed, fetchRssAudioUrl, fetchRssCover } from "./rss.js";
+import Onboarding from "./Onboarding.jsx";
 
 // ── Innholdsdata ──────────────────────────────────────────────────
 // PSAPI-BASERT VERSJON (stabil, brukt til brukertesting).
@@ -570,88 +571,6 @@ function ParentPanel({ mode, setMode, miniIds, setMiniIds, spotifyEnabled, setSp
 }
 
 // ── Onboarding (vises kun første gang) ────────────────────────────
-function Onboarding({ onDone }) {
-  const [step, setStep] = useState(0);
-  const [chosenMode, setChosenMode] = useState("junior");
-
-  const steps = [
-    {
-      emoji: "🎧",
-      title: "Velkommen til Pleiboksen!",
-      text: "En enkel lydspiller laget for barn — trygt, lekent og uten reklame.",
-    },
-    {
-      emoji: "🔒",
-      title: "Begrenset tilgang",
-      text: "Pleiboksen viser bare innholdet du velger som forelder. Du kan alltid endre dette senere ved å trykke 5 ganger på sola øverst i appen.",
-    },
-    {
-      emoji: chosenMode === "mini" ? "🌱" : "🌳",
-      title: "Velg en startmodus",
-      text: "Mini gir et lite, oversiktlig utvalg. Junior viser hele katalogen. Du kan bytte når som helst i foreldrepanelet.",
-      isModeStep: true,
-    },
-  ];
-
-  const s = steps[step];
-
-  return (
-    <div style={{
-      position:"fixed", inset:0, zIndex:400,
-      background:"linear-gradient(180deg,#AEE4FF 0%,#C8F0FF 45%,#DAFFC8 100%)",
-      display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center",
-      padding:"0 32px", fontFamily:"'Nunito',system-ui,sans-serif", textAlign:"center",
-    }}>
-      <div style={{ fontSize:64, marginBottom:20 }}>{s.emoji}</div>
-      <div style={{ fontWeight:900, fontSize:24, color:"#1B4D5C", marginBottom:12, lineHeight:1.2 }}>{s.title}</div>
-      <div style={{ fontWeight:700, fontSize:15, color:"#1B4D5C", opacity:0.75, lineHeight:1.5, marginBottom:32, maxWidth:340 }}>{s.text}</div>
-
-      {s.isModeStep && (
-        <div style={{ display:"flex", gap:12, marginBottom:32, width:"100%", maxWidth:340 }}>
-          <button onClick={() => setChosenMode("mini")} style={{
-            flex:1, padding:"18px 12px", borderRadius:18,
-            background: chosenMode === "mini" ? "#1B4D5C" : "#fff",
-            color: chosenMode === "mini" ? "#fff" : "#1B4D5C",
-            border: chosenMode === "mini" ? "none" : "2px solid #1B4D5C44",
-            fontWeight:900, fontSize:14, cursor:"pointer", fontFamily:"inherit",
-          }}>🌱 Mini</button>
-          <button onClick={() => setChosenMode("junior")} style={{
-            flex:1, padding:"18px 12px", borderRadius:18,
-            background: chosenMode === "junior" ? "#1B4D5C" : "#fff",
-            color: chosenMode === "junior" ? "#fff" : "#1B4D5C",
-            border: chosenMode === "junior" ? "none" : "2px solid #1B4D5C44",
-            fontWeight:900, fontSize:14, cursor:"pointer", fontFamily:"inherit",
-          }}>🌳 Junior</button>
-        </div>
-      )}
-
-      <div style={{ display:"flex", gap:6, marginBottom:24 }}>
-        {steps.map((_, i) => (
-          <div key={i} style={{
-            width: i === step ? 22 : 8, height:8, borderRadius:4,
-            background: i === step ? "#1B4D5C" : "#1B4D5C33",
-            transition:"all 0.2s",
-          }} />
-        ))}
-      </div>
-
-      <button
-        onClick={() => {
-          if (step < steps.length - 1) setStep(step + 1);
-          else onDone(chosenMode);
-        }}
-        style={{
-          background:"#1B4D5C", color:"#fff", border:"none",
-          borderRadius:16, padding:"14px 36px", fontWeight:900, fontSize:16,
-          cursor:"pointer", fontFamily:"inherit",
-        }}
-      >
-        {step < steps.length - 1 ? "Neste" : "Kom i gang!"}
-      </button>
-    </div>
-  );
-}
-
 // ── Glødring ──────────────────────────────────────────────────────
 function GlowRing({ radius, mini = false }) {
   const t = mini ? 2.5 : 5;
@@ -985,6 +904,19 @@ export default function App() {
   const sunTapCount = useRef(0);
   const sunTapTimer = useRef(null);
 
+  // Sjekk om vi nettopp kom tilbake fra Spotify OAuth under onboarding
+  // (login.js redirecter til /?spotify=connected etter vellykket innlogging)
+  const [onboardingSpotifyConnected] = useState(() => {
+    if (typeof window === "undefined") return false;
+    const params = new URLSearchParams(window.location.search);
+    const connected = params.get("spotify") === "connected";
+    if (connected) {
+      // Rydd opp URL-en så ?spotify=connected ikke henger igjen ved refresh
+      window.history.replaceState({}, "", window.location.pathname);
+    }
+    return connected;
+  });
+
   function setMode(m)    { setModeState(m); saveMode(m); }
   function setMiniIds(updater) {
     setMiniIdsState(prev => {
@@ -1005,8 +937,8 @@ export default function App() {
     }
   }
 
-  function handleOnboardingDone(chosenMode) {
-    setMode(chosenMode);
+  function handleOnboardingDone(spotifyChoice) {
+    setSpotifyEnabled(spotifyChoice);
     saveOnboarded();
     setShowOnboarding(false);
   }
@@ -1336,7 +1268,12 @@ export default function App() {
         .pb-row::-webkit-scrollbar { display:none }
       `}</style>
 
-      {showOnboarding && <Onboarding onDone={handleOnboardingDone} />}
+      {showOnboarding && (
+        <Onboarding
+          onDone={handleOnboardingDone}
+          initialSpotifyConnected={onboardingSpotifyConnected}
+        />
+      )}
 
       {showPinModal && (
         <ParentPinModal
