@@ -59,14 +59,17 @@ const NRK_SECTIONS = [
     ],
   },
   {
+    // Gøy natt er fersk nok til å være i RSS. Bursdagen/Superdropsa (27. mars) og
+    // Fantorangen sit fast i do (04.07.2025) har falt ut av RSS-feedens vindu —
+    // bruker psapi-IDer for disse i stedet.
     id: "fantorangenfortellinger", label: "Fantorangenfortellinger", icon: "🎭",
     accent: "#B85A00", color: "#FFF3DC",
     source: "rss", rssUrl: RSS.fantorangenfortellinger,
     items: [
-      { id: "ff-goy-natt",   title: "Gøy natt",                emoji: "🌙", source: "rss" },
-      { id: "ff-bursdagen",  title: "Bursdagen",               emoji: "🎂", source: "rss" },
-      { id: "ff-superdropsa",title: "Superdropsa",             emoji: "🍬", source: "rss" },
-      { id: "ff-fasst-i-do", title: "Fantorangen sit fast i do",emoji: "🚽", source: "rss" },
+      { id: "ff-goy-natt",                                  title: "Gøy natt",                 emoji: "🌙", source: "rss" },
+      { id: "l_f17536cc-f908-4c2d-b536-ccf908ec2df1",       title: "Bursdagen",                emoji: "🎂", source: "api" },
+      { id: "l_55d4584b-3c22-48a6-9458-4b3c2278a6f4",       title: "Superdropsa",              emoji: "🍬", source: "api" },
+      { id: "l_1d43056a-1d70-40e3-8305-6a1d7090e32d",       title: "Fantorangen sit fast i do", emoji: "🚽", source: "api" },
     ],
   },
   {
