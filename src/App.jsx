@@ -164,9 +164,10 @@ const SHOW_SPOTIFY = true;
 const PARENT_PIN = "1234";
 
 const LS_KEYS = {
-  mode:        "pb_mode",          // "mini" | "junior"
-  miniIds:     "pb_mini_ids",      // JSON array av valgte item-IDer
-  onboarded:   "pb_onboarded",     // "1" når onboarding er fullført
+  mode:          "pb_mode",            // "mini" | "junior"
+  miniIds:       "pb_mini_ids",        // JSON array av valgte item-IDer
+  onboarded:     "pb_onboarded",       // "1" når onboarding er fullført
+  spotifyEnabled:"pb_spotify_enabled", // "1" | "0" — global bryter for begge moduser
 };
 
 function loadMode() {
@@ -191,6 +192,15 @@ function loadOnboarded() {
 }
 function saveOnboarded() {
   try { localStorage.setItem(LS_KEYS.onboarded, "1"); } catch {}
+}
+function loadSpotifyEnabled() {
+  try {
+    const v = localStorage.getItem(LS_KEYS.spotifyEnabled);
+    return v === null ? true : v === "1"; // default: på
+  } catch { return true; }
+}
+function saveSpotifyEnabled(enabled) {
+  try { localStorage.setItem(LS_KEYS.spotifyEnabled, enabled ? "1" : "0"); } catch {}
 }
 
 // ── API ───────────────────────────────────────────────────────────
@@ -432,12 +442,12 @@ function ParentPinModal({ onSuccess, onCancel }) {
 }
 
 // ── Foreldrepanel: bytt modus og velg Mini-utvalg ─────────────────
-function ParentPanel({ mode, setMode, miniIds, setMiniIds, onClose }) {
+function ParentPanel({ mode, setMode, miniIds, setMiniIds, spotifyEnabled, setSpotifyEnabled, onClose }) {
   function toggleItem(id) {
     setMiniIds(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]);
   }
 
-  const allSections = [...NRK_SECTIONS, ...(SHOW_SPOTIFY ? [SPOTIFY_SECTION] : [])];
+  const allSections = [...NRK_SECTIONS, ...((SHOW_SPOTIFY && spotifyEnabled) ? [SPOTIFY_SECTION] : [])];
 
   return (
     <div style={{
@@ -457,6 +467,35 @@ function ParentPanel({ mode, setMode, miniIds, setMiniIds, onClose }) {
       </div>
 
       <div style={{ padding:"20px 20px 60px", maxWidth:560, margin:"0 auto" }}>
+        {/* Spotify-bryter */}
+        <div style={{
+          display:"flex", alignItems:"center", justifyContent:"space-between",
+          background:"#fff", borderRadius:16, padding:"14px 16px", marginBottom:24,
+          border:"2px solid #eee",
+        }}>
+          <div>
+            <div style={{ fontWeight:900, fontSize:14, color:"#1a1a1a" }}>🎵 Spotify</div>
+            <div style={{ fontWeight:700, fontSize:11, color:"#888", marginTop:2 }}>
+              {spotifyEnabled ? "Vises i begge moduser" : "Skjult — bruk hvis ustabilt eller uten Premium"}
+            </div>
+          </div>
+          <button
+            onClick={() => setSpotifyEnabled(!spotifyEnabled)}
+            style={{
+              width:52, height:30, borderRadius:15, padding:3,
+              background: spotifyEnabled ? "#1B4D5C" : "#ddd",
+              border:"none", cursor:"pointer", flexShrink:0,
+              transition:"background 0.18s",
+            }}
+          >
+            <div style={{
+              width:24, height:24, borderRadius:"50%", background:"#fff",
+              transform: spotifyEnabled ? "translateX(22px)" : "translateX(0)",
+              transition:"transform 0.18s",
+            }} />
+          </button>
+        </div>
+
         {/* Modusvalg */}
         <div style={{ marginBottom:28 }}>
           <div style={{ fontWeight:900, fontSize:15, color:"#1a1a1a", marginBottom:10 }}>Visningsmodus</div>
@@ -690,6 +729,61 @@ function FullPlayer({ item, section, source, playing, loading, progress, duratio
 // ── FIX 3+4: PbCard og PbSection memoisert utenfor App ───────────
 // Disse tar IKKE progress/duration som props — rendres bare når
 // activeid, playing eller covers endrer seg.
+// ── Mini-modus: store kort, vertikal scroll (prototype-I-stil) ───
+const MiniCard = memo(function MiniCard({ item, section, isActive, playing, onClick }) {
+  const [err, setErr] = useState(false);
+  return (
+    <button onClick={onClick} style={{
+      display:"block", width:"100%", textAlign:"left",
+      background:"#fff", border:"none", borderRadius:24,
+      overflow:"hidden", padding:0, cursor:"pointer",
+      marginBottom:18, fontFamily:"inherit",
+      boxShadow: isActive ? `0 8px 28px ${section.accent}55` : "0 3px 14px rgba(0,0,0,0.10)",
+      outline: isActive ? `3px solid ${section.accent}` : "3px solid transparent",
+      transition:"all 0.18s ease",
+    }}>
+      <div style={{
+        width:"100%", aspectRatio:"4 / 3",
+        background: item.cover ? undefined : `linear-gradient(135deg, ${section.color}, ${section.accent}22)`,
+        display:"flex", alignItems:"center", justifyContent:"center",
+        position:"relative", overflow:"hidden",
+      }}>
+        {item.cover && !err
+          ? <img src={item.cover} alt={item.title} onError={()=>setErr(true)} style={{ width:"100%", height:"100%", objectFit:"cover" }} />
+          : <span style={{ fontSize:84 }}>{item.emoji}</span>
+        }
+        {isActive && playing && (
+          <div style={{
+            position:"absolute", top:14, right:14,
+            background:section.accent, borderRadius:24, padding:"7px 14px",
+            display:"flex", alignItems:"center", gap:5,
+          }}>
+            {[0,0.18,0.1].map((d,i)=>(
+              <div key={i} style={{ width:4, borderRadius:2, background:"#fff", animation:`eqbar 0.7s ${d}s ease-in-out infinite alternate` }} />
+            ))}
+            <span style={{ color:"#fff", fontSize:13, fontWeight:800, marginLeft:2 }}>Spiller</span>
+          </div>
+        )}
+      </div>
+      <div style={{ padding:"18px 20px 22px", display:"flex", alignItems:"center", gap:16 }}>
+        <div style={{ flex:1 }}>
+          <div style={{ fontSize:20, fontWeight:900, color:"#1a1a1a", lineHeight:1.25 }}>{item.emoji} {item.title}</div>
+        </div>
+        <div style={{
+          width:56, height:56, borderRadius:"50%", flexShrink:0,
+          background: isActive ? section.accent : section.accent + "1A",
+          display:"flex", alignItems:"center", justifyContent:"center",
+        }}>
+          {isActive && playing
+            ? <PauseIcon size={22} color="#fff" />
+            : <PlayIcon size={22} color={isActive ? "#fff" : section.accent} />
+          }
+        </div>
+      </div>
+    </button>
+  );
+});
+
 const PbCard = memo(function PbCard({ item, section, isActive, playing, onClick }) {
   const [err, setErr] = useState(false);
   return (
@@ -747,6 +841,34 @@ const PbSection = memo(function PbSection({ section, covers, activeId, activeSou
     </div>
   );
 });
+
+// ── Mini-modus: flat, vertikal liste av store kort på tvers av seksjoner ──
+const MiniGrid = memo(function MiniGrid({ sections, covers, activeId, source, playing, onSelectNrk, onSelectSpotify }) {
+  // Flat ut alle valgte items fra alle seksjoner (NRK + evt. Spotify) til én liste
+  const flat = [];
+  sections.forEach(section => {
+    const isSpotify = section.id === "spotify";
+    section.items.forEach(item => {
+      flat.push({ item, section, isSpotify });
+    });
+  });
+
+  return (
+    <div>
+      {flat.map(({ item, section, isSpotify }) => (
+        <MiniCard
+          key={item.id}
+          item={{ ...item, cover: covers[item.id] }}
+          section={section}
+          isActive={activeId === item.id && source === (isSpotify ? "spotify" : "nrk")}
+          playing={playing}
+          onClick={() => isSpotify ? onSelectSpotify(item) : onSelectNrk(item, section)}
+        />
+      ))}
+    </div>
+  );
+});
+
 
 // ── iPad spiller — også utenfor App ──────────────────────────────
 const IpadPlayer = memo(function IpadPlayer({ activeItem, activeSection, source, playing, loading, progress, duration, onToggle, onPrev, onNext, onSeek }) {
@@ -815,6 +937,7 @@ export default function App() {
   // Foreldrekontroll
   const [mode, setModeState]       = useState(() => loadMode());
   const [miniIds, setMiniIdsState] = useState(() => loadMiniIds());
+  const [spotifyEnabled, setSpotifyEnabledState] = useState(() => loadSpotifyEnabled());
   const [showOnboarding, setShowOnboarding] = useState(() => !loadOnboarded());
   const [showPinModal, setShowPinModal]     = useState(false);
   const [showParentPanel, setShowParentPanel] = useState(false);
@@ -829,6 +952,7 @@ export default function App() {
       return next;
     });
   }
+  function setSpotifyEnabled(enabled) { setSpotifyEnabledState(enabled); saveSpotifyEnabled(enabled); }
 
   function handleSunTap() {
     sunTapCount.current += 1;
@@ -1154,7 +1278,7 @@ export default function App() {
     ? { ...SPOTIFY_SECTION, items: SPOTIFY_SECTION.items.filter(i => miniIds.includes(i.id)) }
     : SPOTIFY_SECTION;
 
-  const showSpotifySection = SHOW_SPOTIFY && (mode === "junior" || visibleSpotifySection.items.length > 0);
+  const showSpotifySection = SHOW_SPOTIFY && spotifyEnabled && (mode === "junior" || visibleSpotifySection.items.length > 0);
 
   return (
     <div style={{ minHeight:"100vh", fontFamily:"'Nunito',system-ui,sans-serif", position:"relative" }}>
@@ -1182,6 +1306,7 @@ export default function App() {
         <ParentPanel
           mode={mode} setMode={setMode}
           miniIds={miniIds} setMiniIds={setMiniIds}
+          spotifyEnabled={spotifyEnabled} setSpotifyEnabled={setSpotifyEnabled}
           onClose={() => setShowParentPanel(false)}
         />
       )}
@@ -1227,18 +1352,29 @@ export default function App() {
               <p style={{ fontSize:"0.8rem", fontWeight:700, color:"#1B4D5C", opacity:0.5, margin:0 }}>Hva vil du høre?</p>
             </div>
             <div style={{ padding:"0.2rem 1.1rem 0" }}>
-              {visibleNrkSections.length === 0 && mode === "mini" && (
+              {visibleNrkSections.length === 0 && (mode !== "mini" || !showSpotifySection || visibleSpotifySection.items.length === 0) && (
                 <div style={{ textAlign:"center", padding:"40px 20px", color:"#1B4D5C99" }}>
                   <div style={{ fontSize:40, marginBottom:10 }}>🌱</div>
                   <div style={{ fontWeight:800, fontSize:14 }}>Ingen innhold valgt ennå.</div>
                   <div style={{ fontWeight:700, fontSize:12, marginTop:4 }}>En voksen kan velge innhold i foreldrepanelet.</div>
                 </div>
               )}
-              {visibleNrkSections.map((section) => (
-                <PbSection key={section.id} section={section} covers={nrkCovers} activeId={activeItem?.id} activeSource={source} playing={playing} onSelect={(item) => velgNrkCb(item, section)} />
-              ))}
-              {showSpotifySection && (
-                <PbSection section={visibleSpotifySection} covers={spotifyCovers} activeId={activeItem?.id} activeSource={source} playing={playing} onSelect={velgSpotifyCb} />
+              {mode === "mini" ? (
+                <MiniGrid
+                  sections={[...visibleNrkSections, ...(showSpotifySection ? [visibleSpotifySection] : [])]}
+                  covers={{ ...nrkCovers, ...spotifyCovers }}
+                  activeId={activeItem?.id} source={source} playing={playing}
+                  onSelectNrk={velgNrkCb} onSelectSpotify={velgSpotifyCb}
+                />
+              ) : (
+                <>
+                  {visibleNrkSections.map((section) => (
+                    <PbSection key={section.id} section={section} covers={nrkCovers} activeId={activeItem?.id} activeSource={source} playing={playing} onSelect={(item) => velgNrkCb(item, section)} />
+                  ))}
+                  {showSpotifySection && (
+                    <PbSection section={visibleSpotifySection} covers={spotifyCovers} activeId={activeItem?.id} activeSource={source} playing={playing} onSelect={velgSpotifyCb} />
+                  )}
+                </>
               )}
               {showSpotifySection && !auth?.loggedIn && <p style={{ color:"#888", fontSize:"0.75rem", fontWeight:700, textAlign:"center", marginTop:-4, marginBottom:12 }}>🔒 Trykk på en sang for å koble til Spotify</p>}
             </div>
