@@ -2,10 +2,13 @@ import { useState, useEffect, useRef, memo, useCallback } from "react";
 import { fetchRssFeed, fetchRssAudioUrl, fetchRssCover } from "./rss.js";
 
 // ── Innholdsdata ──────────────────────────────────────────────────
-// source: "rss"  → henter lyd og cover fra RSS-feed (robust, ingen proxy)
-// source: "api"  → bruker psapi.nrk.no via Vercel proxy (fallback)
-// rssUrl på seksjon: brukes til cover-lasting og episode-oppslag
-// rssUrl på item: overstyrer seksjonens feed (f.eks. BlimE fra musik-feed)
+// PSAPI-BASERT VERSJON (stabil, brukt til brukertesting).
+// RSS-koden (rss.js, fetchRssAudioUrl m.fl.) er beholdt i kodebasen
+// som dormant infrastruktur for en fremtidig RSS-POC, men ingen
+// seksjoner bruker source:"rss" lenger — NRK sine RSS-feeds viste
+// seg for upålitelige (litt vindu med nyeste episoder, treffer
+// sjelden de kuraterte favorittene) til å bruke i en stabil prototype.
+// Se chat-historikk for detaljer rundt avgjørelsen.
 
 const RSS = {
   halloBablo:             "https://podkast.nrk.no/program/hallo_bablo.rss",
@@ -21,29 +24,29 @@ const NRK_SECTIONS = [
   {
     id: "hallo-bablo", label: "Hallo Bablo", icon: "📚",
     accent: "#1B6B8A", color: "#E3F2F9",
-    source: "rss", rssUrl: RSS.halloBablo,
+    source: "api",
     items: [
-      { id: "hb-oversvommelse",    title: "Oversvømmelse",               emoji: "🌊", source: "rss" },
-      { id: "hb-ja-dag",           title: "Ja-dag",                      emoji: "✅", source: "rss" },
-      { id: "hb-superlimet",       title: "Superlimet",                  emoji: "🔧", source: "rss" },
-      { id: "hb-lottes-banneshow", title: "Lottes banneshow",            emoji: "🤐", source: "rss" },
-      { id: "hb-fiskoteket",       title: "Fiskoteket",                  emoji: "🐟", source: "rss" },
-      { id: "hb-dinosaurmysteriet",title: "Dinosaurmysteriet",           emoji: "🦕", source: "rss" },
-      { id: "hb-det-snor-inne",    title: "Det snør inne",               emoji: "❄️", source: "rss" },
-      { id: "hb-egget",            title: "Hva er inni det store egget?",emoji: "🥚", source: "rss" },
-      { id: "hb-lotte-leker-dod",  title: "Lotte leker død",            emoji: "💀", source: "rss" },
-      { id: "hb-bremsespor",       title: "Bremsespor-mysteriet",        emoji: "🚗", source: "rss" },
-      { id: "hb-fantasibygging",   title: "Fantasibygging",              emoji: "🏗️", source: "rss" },
+      { id: "l_b9a1151b-f64b-4658-a115-1bf64ba658f9", title: "Oversvømmelse",               emoji: "🌊", source: "api" },
+      { id: "l_fbd86653-d114-44a4-9866-53d11464a4ae", title: "Ja-dag",                      emoji: "✅", source: "api" },
+      { id: "l_8172372d-510a-49d6-b237-2d510af9d6ac", title: "Superlimet",                  emoji: "🔧", source: "api" },
+      { id: "l_e6b980ce-8601-476a-b980-ce8601176a46", title: "Lottes banneshow",            emoji: "🤐", source: "api" },
+      { id: "l_9a5246e8-8e2b-4966-9246-e88e2b1966ca", title: "Fiskoteket",                  emoji: "🐟", source: "api" },
+      { id: "l_135ec467-a256-4053-9ec4-67a25660539d", title: "Dinosaurmysteriet",           emoji: "🦕", source: "api" },
+      { id: "l_e61edd4f-9d75-430e-9edd-4f9d75e30e50", title: "Det snør inne",               emoji: "❄️", source: "api" },
+      { id: "l_af64b356-d05c-4cd6-a4b3-56d05cacd6b7", title: "Hva er inni det store egget?", emoji: "🥚", source: "api" },
+      { id: "l_02e63def-dabd-4f1e-a63d-efdabd5f1e26", title: "Lotte leker død",            emoji: "💀", source: "api" },
+      { id: "l_01e1ebbe-fe80-4e98-a1eb-befe804e98ba", title: "Bremsespor-mysteriet",        emoji: "🚗", source: "api" },
+      { id: "l_6e7a2e2c-44f3-4660-ba2e-2c44f366607f", title: "Fantasibygging",              emoji: "🏗️", source: "api" },
     ],
   },
   {
     id: "kokosbananas", label: "Kokosbananas", icon: "🥥",
     accent: "#B85A00", color: "#FFF0DC",
-    source: "rss", rssUrl: RSS.kokosbananas,
+    source: "api",
     items: [
-      { id: "kok-sykkel",    title: "Superdupersykkelen", emoji: "🚲", source: "rss" },
-      { id: "kok-melon",     title: "Melonhvalen",        emoji: "🍉🐋", source: "rss" },
-      { id: "kok-brakebyraa",title: "Bråkebyrået",        emoji: "🔊", source: "rss" },
+      { id: "l_810de249-e5d3-4a12-8de2-49e5d33a12d2", title: "Superdupersykkelen", emoji: "🚲", source: "api" },
+      { id: "l_cb5acb0d-1284-47d0-9acb-0d128447d0c2", title: "Melonhvalen",        emoji: "🍉🐋", source: "api" },
+      { id: "l_c1919e6d-7311-4cae-919e-6d7311dcae09", title: "Bråkebyrået",        emoji: "🔊", source: "api" },
     ],
   },
   {
@@ -64,9 +67,9 @@ const NRK_SECTIONS = [
     // bruker psapi-IDer for disse i stedet.
     id: "fantorangenfortellinger", label: "Fantorangenfortellinger", icon: "🎭",
     accent: "#B85A00", color: "#FFF3DC",
-    source: "rss", rssUrl: RSS.fantorangenfortellinger,
+    source: "api",
     items: [
-      { id: "ff-goy-natt",                                  title: "Gøy natt",                 emoji: "🌙", source: "rss" },
+      { id: "l_17d00a92-711b-4bdc-900a-92711b2bdce1",       title: "Gøy natt",                 emoji: "🌙", source: "api" },
       { id: "l_f17536cc-f908-4c2d-b536-ccf908ec2df1",       title: "Bursdagen",                emoji: "🎂", source: "api" },
       { id: "l_55d4584b-3c22-48a6-9458-4b3c2278a6f4",       title: "Superdropsa",              emoji: "🍬", source: "api" },
       { id: "l_1d43056a-1d70-40e3-8305-6a1d7090e32d",       title: "Fantorangen sit fast i do", emoji: "🚽", source: "api" },
@@ -126,13 +129,12 @@ const NRK_SECTIONS = [
   {
     id: "brannbamsen-bjornis", label: "Brannbamsen Bjørnis", icon: "🧸",
     accent: "#C0392B", color: "#FDECEA",
-    source: "rss", rssUrl: RSS.brannbamsenBjornis,
+    // De fire andre episodene (Tatt av vinden, På biblioteket, Hund i fare,
+    // Tur på stranda) kunne ikke bekreftes som faktiske NRK-episodetitler
+    // og er fjernet i denne versjonen.
+    source: "api",
     items: [
-      { id: "bb-finger",   title: "Fingeren sitter fast", emoji: "🤞", source: "rss" },
-      { id: "bb-vinden",   title: "Tatt av vinden",       emoji: "💨", source: "rss" },
-      { id: "bb-biblio",   title: "På biblioteket",       emoji: "📖", source: "rss" },
-      { id: "bb-hund",     title: "Hund i fare",          emoji: "🐕", source: "rss" },
-      { id: "bb-stranda",  title: "Tur på stranda",       emoji: "🏖️", source: "rss" },
+      { id: "l_a860e8cf-d13d-4bd3-a0e8-cfd13d4bd3b1", title: "Fingeren sitter fast", emoji: "🤞", source: "api" },
     ],
   },
 ];
