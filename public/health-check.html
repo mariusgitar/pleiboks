@@ -63,14 +63,18 @@
       document.getElementById("results").appendChild(el);
     }
 
+    function normalizeTitle(s) {
+      return s
+        .toLowerCase()
+        .normalize("NFKD")
+        .replace(/[?!.,:;'’]/g, "")
+        .replace(/\s+/g, " ")
+        .trim();
+    }
+
     function matchTitle(items, target) {
-      const lower = target.toLowerCase();
-      return (
-        items.find(e => e.title.toLowerCase() === lower) ||
-        items.find(e => e.title.toLowerCase().includes(lower)) ||
-        items.find(e => lower.includes(e.title.toLowerCase())) ||
-        null
-      );
+      const norm = normalizeTitle(target);
+      return items.find(e => normalizeTitle(e.title) === norm) || null;
     }
 
     function parseRss(xmlText) {
