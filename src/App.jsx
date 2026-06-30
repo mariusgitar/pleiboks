@@ -159,6 +159,40 @@ const SPOTIFY_SECTION = {
 
 const SHOW_SPOTIFY = true;
 
+// ── Foreldrekontroll ───────────────────────────────────────────────
+// Endre PIN her ved behov. Lagres ikke noe sted — bare i kildekoden.
+const PARENT_PIN = "1234";
+
+const LS_KEYS = {
+  mode:        "pb_mode",          // "mini" | "junior"
+  miniIds:     "pb_mini_ids",      // JSON array av valgte item-IDer
+  onboarded:   "pb_onboarded",     // "1" når onboarding er fullført
+};
+
+function loadMode() {
+  try { return localStorage.getItem(LS_KEYS.mode) || "junior"; }
+  catch { return "junior"; }
+}
+function saveMode(mode) {
+  try { localStorage.setItem(LS_KEYS.mode, mode); } catch {}
+}
+function loadMiniIds() {
+  try {
+    const raw = localStorage.getItem(LS_KEYS.miniIds);
+    return raw ? JSON.parse(raw) : [];
+  } catch { return []; }
+}
+function saveMiniIds(ids) {
+  try { localStorage.setItem(LS_KEYS.miniIds, JSON.stringify(ids)); } catch {}
+}
+function loadOnboarded() {
+  try { return localStorage.getItem(LS_KEYS.onboarded) === "1"; }
+  catch { return false; }
+}
+function saveOnboarded() {
+  try { localStorage.setItem(LS_KEYS.onboarded, "1"); } catch {}
+}
+
 // ── API ───────────────────────────────────────────────────────────
 async function fetchNrkManifest(id, programType) {
   const endpoint = programType === "program" ? "program" : "podcast";
@@ -235,7 +269,7 @@ function NextIcon({ size = 22, color = "rgba(255,255,255,0.75)" }) {
 }
 
 // ── Bakgrunnsdekor ────────────────────────────────────────────────
-function SkyBg() {
+function SkyBg({ onSunTap }) {
   return (
     <>
       <div style={{ position:"fixed", inset:0, zIndex:0, background:"linear-gradient(180deg,#AEE4FF 0%,#C8F0FF 45%,#DAFFC8 100%)", pointerEvents:"none" }} />
@@ -250,7 +284,16 @@ function SkyBg() {
           animation:`cloudDrift ${c.dur} linear ${c.delay}s infinite`,
         }}>☁️</div>
       ))}
-      <div style={{ position:"fixed", top:"1rem", right:"1rem", fontSize:"2.6rem", pointerEvents:"none", zIndex:0, animation:"sunSpin 22s linear infinite" }}>☀️</div>
+      {/* Sola — skjult inngang til foreldrepanel: trykk 5 ganger */}
+      <div
+        onClick={onSunTap}
+        style={{
+          position:"fixed", top:"1rem", right:"1rem", fontSize:"2.6rem",
+          pointerEvents:"auto", zIndex:5, cursor:"default",
+          animation:"sunSpin 22s linear infinite",
+          padding:"0.5rem", margin:"-0.5rem", // større trykkflate uten å endre visuell størrelse
+        }}
+      >☀️</div>
       <div style={{ position:"fixed", bottom:0, left:0, right:0, zIndex:0, fontSize:"1.8rem", letterSpacing:"-0.25rem", textAlign:"center", opacity:0.3, pointerEvents:"none", lineHeight:1 }}>🌿🌿🌿🌿🌿🌿🌿🌿🌿🌿🌿🌿🌿🌿🌿🌿🌿🌿</div>
     </>
   );
@@ -308,6 +351,262 @@ function SpotifyVoksenModal({ onRetry, onDismiss }) {
           <button onClick={onRetry} style={{ flex:2, background:"#1B4D5C", color:"#fff", border:"none", borderRadius:14, padding:"12px", fontWeight:900, fontSize:15, cursor:"pointer", fontFamily:"inherit" }}>Prøv igjen</button>
         </div>
       </div>
+    </div>
+  );
+}
+
+// ── PIN-modal for foreldretilgang ──────────────────────────────────
+function ParentPinModal({ onSuccess, onCancel }) {
+  const [pin, setPin] = useState("");
+  const [shake, setShake] = useState(false);
+
+  function press(digit) {
+    if (pin.length >= 4) return;
+    const next = pin + digit;
+    setPin(next);
+    if (next.length === 4) {
+      if (next === PARENT_PIN) {
+        setTimeout(onSuccess, 150);
+      } else {
+        setShake(true);
+        setTimeout(() => { setPin(""); setShake(false); }, 450);
+      }
+    }
+  }
+  function backspace() { setPin(p => p.slice(0, -1)); }
+
+  return (
+    <div style={{
+      position:"fixed", inset:0, zIndex:300,
+      background:"rgba(10,20,30,0.92)",
+      display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center",
+      fontFamily:"'Nunito',system-ui,sans-serif", padding:"0 32px",
+    }}>
+      <div style={{ fontSize:40, marginBottom:8 }}>🔒</div>
+      <div style={{ color:"#fff", fontWeight:900, fontSize:18, marginBottom:4 }}>Foreldretilgang</div>
+      <div style={{ color:"rgba(255,255,255,0.5)", fontSize:13, fontWeight:700, marginBottom:24 }}>Skriv inn PIN-kode</div>
+
+      <div style={{
+        display:"flex", gap:14, marginBottom:32,
+        animation: shake ? "shakeX 0.4s ease" : "none",
+      }}>
+        {[0,1,2,3].map(i => (
+          <div key={i} style={{
+            width:16, height:16, borderRadius:"50%",
+            background: i < pin.length ? "#fff" : "rgba(255,255,255,0.2)",
+            border: "2px solid rgba(255,255,255,0.3)",
+            transition:"background 0.15s",
+          }} />
+        ))}
+      </div>
+
+      <div style={{ display:"grid", gridTemplateColumns:"repeat(3, 64px)", gap:14, marginBottom:20 }}>
+        {[1,2,3,4,5,6,7,8,9].map(n => (
+          <button key={n} onClick={() => press(String(n))} style={{
+            width:64, height:64, borderRadius:"50%",
+            background:"rgba(255,255,255,0.1)", border:"1.5px solid rgba(255,255,255,0.18)",
+            color:"#fff", fontSize:24, fontWeight:800, cursor:"pointer", fontFamily:"inherit",
+          }}>{n}</button>
+        ))}
+        <div />
+        <button onClick={() => press("0")} style={{
+          width:64, height:64, borderRadius:"50%",
+          background:"rgba(255,255,255,0.1)", border:"1.5px solid rgba(255,255,255,0.18)",
+          color:"#fff", fontSize:24, fontWeight:800, cursor:"pointer", fontFamily:"inherit",
+        }}>0</button>
+        <button onClick={backspace} style={{
+          width:64, height:64, borderRadius:"50%",
+          background:"none", border:"none",
+          color:"rgba(255,255,255,0.6)", fontSize:20, cursor:"pointer", fontFamily:"inherit",
+        }}>⌫</button>
+      </div>
+
+      <button onClick={onCancel} style={{
+        background:"none", border:"none", color:"rgba(255,255,255,0.4)",
+        fontWeight:700, fontSize:14, cursor:"pointer", fontFamily:"inherit", padding:10,
+      }}>Avbryt</button>
+
+      <style>{`@keyframes shakeX { 0%,100%{transform:translateX(0)} 25%{transform:translateX(-8px)} 75%{transform:translateX(8px)} }`}</style>
+    </div>
+  );
+}
+
+// ── Foreldrepanel: bytt modus og velg Mini-utvalg ─────────────────
+function ParentPanel({ mode, setMode, miniIds, setMiniIds, onClose }) {
+  function toggleItem(id) {
+    setMiniIds(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]);
+  }
+
+  const allSections = [...NRK_SECTIONS, ...(SHOW_SPOTIFY ? [SPOTIFY_SECTION] : [])];
+
+  return (
+    <div style={{
+      position:"fixed", inset:0, zIndex:250,
+      background:"#FAF7F4", overflowY:"auto",
+      fontFamily:"'Nunito',system-ui,sans-serif",
+    }}>
+      <div style={{ position:"sticky", top:0, background:"#1B4D5C", padding:"20px 20px 16px", display:"flex", alignItems:"center", justifyContent:"space-between", zIndex:1 }}>
+        <div>
+          <div style={{ color:"#F5C842", fontSize:11, fontWeight:800, letterSpacing:2, textTransform:"uppercase" }}>Foreldrepanel</div>
+          <div style={{ color:"#fff", fontSize:20, fontWeight:900 }}>Innstillinger</div>
+        </div>
+        <button onClick={onClose} style={{
+          width:40, height:40, borderRadius:"50%", background:"rgba(255,255,255,0.15)",
+          border:"none", color:"#fff", fontSize:18, cursor:"pointer", fontFamily:"inherit",
+        }}>✕</button>
+      </div>
+
+      <div style={{ padding:"20px 20px 60px", maxWidth:560, margin:"0 auto" }}>
+        {/* Modusvalg */}
+        <div style={{ marginBottom:28 }}>
+          <div style={{ fontWeight:900, fontSize:15, color:"#1a1a1a", marginBottom:10 }}>Visningsmodus</div>
+          <div style={{ display:"flex", gap:10 }}>
+            <button onClick={() => setMode("mini")} style={{
+              flex:1, padding:"16px 12px", borderRadius:16,
+              background: mode === "mini" ? "#1B4D5C" : "#fff",
+              color: mode === "mini" ? "#fff" : "#1a1a1a",
+              border: mode === "mini" ? "none" : "2px solid #eee",
+              fontWeight:900, fontSize:14, cursor:"pointer", fontFamily:"inherit",
+              textAlign:"left",
+            }}>
+              <div style={{ fontSize:22, marginBottom:4 }}>🌱</div>
+              Mini
+              <div style={{ fontWeight:700, fontSize:11, opacity:0.7, marginTop:2 }}>Få, store valg</div>
+            </button>
+            <button onClick={() => setMode("junior")} style={{
+              flex:1, padding:"16px 12px", borderRadius:16,
+              background: mode === "junior" ? "#1B4D5C" : "#fff",
+              color: mode === "junior" ? "#fff" : "#1a1a1a",
+              border: mode === "junior" ? "none" : "2px solid #eee",
+              fontWeight:900, fontSize:14, cursor:"pointer", fontFamily:"inherit",
+              textAlign:"left",
+            }}>
+              <div style={{ fontSize:22, marginBottom:4 }}>🌳</div>
+              Junior
+              <div style={{ fontWeight:700, fontSize:11, opacity:0.7, marginTop:2 }}>Hele katalogen</div>
+            </button>
+          </div>
+        </div>
+
+        {/* Mini-utvalg */}
+        {mode === "mini" && (
+          <div>
+            <div style={{ fontWeight:900, fontSize:15, color:"#1a1a1a", marginBottom:4 }}>Velg innhold for Mini</div>
+            <div style={{ fontSize:12, color:"#888", fontWeight:700, marginBottom:14 }}>
+              {miniIds.length === 0 ? "Ingen valgt ennå" : `${miniIds.length} valgt`}
+            </div>
+            {allSections.map(section => (
+              <div key={section.id} style={{ marginBottom:18 }}>
+                <div style={{ display:"flex", alignItems:"center", gap:8, marginBottom:8 }}>
+                  <div style={{ width:26, height:26, borderRadius:8, background:section.accent, display:"flex", alignItems:"center", justifyContent:"center", fontSize:14 }}>{section.icon}</div>
+                  <span style={{ fontWeight:800, fontSize:14, color:"#1a1a1a" }}>{section.label}</span>
+                </div>
+                <div style={{ display:"flex", flexWrap:"wrap", gap:8 }}>
+                  {section.items.map(item => {
+                    const checked = miniIds.includes(item.id);
+                    return (
+                      <button key={item.id} onClick={() => toggleItem(item.id)} style={{
+                        display:"flex", alignItems:"center", gap:6,
+                        padding:"8px 12px", borderRadius:20,
+                        background: checked ? section.accent : "#fff",
+                        color: checked ? "#fff" : "#555",
+                        border: checked ? "none" : "1.5px solid #eee",
+                        fontSize:12, fontWeight:700, cursor:"pointer", fontFamily:"inherit",
+                      }}>
+                        <span>{checked ? "✓" : item.emoji}</span>
+                        {item.title}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ── Onboarding (vises kun første gang) ────────────────────────────
+function Onboarding({ onDone }) {
+  const [step, setStep] = useState(0);
+  const [chosenMode, setChosenMode] = useState("junior");
+
+  const steps = [
+    {
+      emoji: "🎧",
+      title: "Velkommen til Pleiboksen!",
+      text: "En enkel lydspiller laget for barn — trygt, lekent og uten reklame.",
+    },
+    {
+      emoji: "🔒",
+      title: "Begrenset tilgang",
+      text: "Pleiboksen viser bare innholdet du velger som forelder. Du kan alltid endre dette senere ved å trykke 5 ganger på sola øverst i appen.",
+    },
+    {
+      emoji: chosenMode === "mini" ? "🌱" : "🌳",
+      title: "Velg en startmodus",
+      text: "Mini gir et lite, oversiktlig utvalg. Junior viser hele katalogen. Du kan bytte når som helst i foreldrepanelet.",
+      isModeStep: true,
+    },
+  ];
+
+  const s = steps[step];
+
+  return (
+    <div style={{
+      position:"fixed", inset:0, zIndex:400,
+      background:"linear-gradient(180deg,#AEE4FF 0%,#C8F0FF 45%,#DAFFC8 100%)",
+      display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center",
+      padding:"0 32px", fontFamily:"'Nunito',system-ui,sans-serif", textAlign:"center",
+    }}>
+      <div style={{ fontSize:64, marginBottom:20 }}>{s.emoji}</div>
+      <div style={{ fontWeight:900, fontSize:24, color:"#1B4D5C", marginBottom:12, lineHeight:1.2 }}>{s.title}</div>
+      <div style={{ fontWeight:700, fontSize:15, color:"#1B4D5C", opacity:0.75, lineHeight:1.5, marginBottom:32, maxWidth:340 }}>{s.text}</div>
+
+      {s.isModeStep && (
+        <div style={{ display:"flex", gap:12, marginBottom:32, width:"100%", maxWidth:340 }}>
+          <button onClick={() => setChosenMode("mini")} style={{
+            flex:1, padding:"18px 12px", borderRadius:18,
+            background: chosenMode === "mini" ? "#1B4D5C" : "#fff",
+            color: chosenMode === "mini" ? "#fff" : "#1B4D5C",
+            border: chosenMode === "mini" ? "none" : "2px solid #1B4D5C44",
+            fontWeight:900, fontSize:14, cursor:"pointer", fontFamily:"inherit",
+          }}>🌱 Mini</button>
+          <button onClick={() => setChosenMode("junior")} style={{
+            flex:1, padding:"18px 12px", borderRadius:18,
+            background: chosenMode === "junior" ? "#1B4D5C" : "#fff",
+            color: chosenMode === "junior" ? "#fff" : "#1B4D5C",
+            border: chosenMode === "junior" ? "none" : "2px solid #1B4D5C44",
+            fontWeight:900, fontSize:14, cursor:"pointer", fontFamily:"inherit",
+          }}>🌳 Junior</button>
+        </div>
+      )}
+
+      <div style={{ display:"flex", gap:6, marginBottom:24 }}>
+        {steps.map((_, i) => (
+          <div key={i} style={{
+            width: i === step ? 22 : 8, height:8, borderRadius:4,
+            background: i === step ? "#1B4D5C" : "#1B4D5C33",
+            transition:"all 0.2s",
+          }} />
+        ))}
+      </div>
+
+      <button
+        onClick={() => {
+          if (step < steps.length - 1) setStep(step + 1);
+          else onDone(chosenMode);
+        }}
+        style={{
+          background:"#1B4D5C", color:"#fff", border:"none",
+          borderRadius:16, padding:"14px 36px", fontWeight:900, fontSize:16,
+          cursor:"pointer", fontFamily:"inherit",
+        }}
+      >
+        {step < steps.length - 1 ? "Neste" : "Kom i gang!"}
+      </button>
     </div>
   );
 }
@@ -512,6 +811,40 @@ export default function App() {
   const [isWide, setIsWide]                   = useState(
     typeof window !== "undefined" ? window.innerWidth >= 768 : false
   );
+
+  // Foreldrekontroll
+  const [mode, setModeState]       = useState(() => loadMode());
+  const [miniIds, setMiniIdsState] = useState(() => loadMiniIds());
+  const [showOnboarding, setShowOnboarding] = useState(() => !loadOnboarded());
+  const [showPinModal, setShowPinModal]     = useState(false);
+  const [showParentPanel, setShowParentPanel] = useState(false);
+  const sunTapCount = useRef(0);
+  const sunTapTimer = useRef(null);
+
+  function setMode(m)    { setModeState(m); saveMode(m); }
+  function setMiniIds(updater) {
+    setMiniIdsState(prev => {
+      const next = typeof updater === "function" ? updater(prev) : updater;
+      saveMiniIds(next);
+      return next;
+    });
+  }
+
+  function handleSunTap() {
+    sunTapCount.current += 1;
+    clearTimeout(sunTapTimer.current);
+    sunTapTimer.current = setTimeout(() => { sunTapCount.current = 0; }, 1500);
+    if (sunTapCount.current >= 5) {
+      sunTapCount.current = 0;
+      setShowPinModal(true);
+    }
+  }
+
+  function handleOnboardingDone(chosenMode) {
+    setMode(chosenMode);
+    saveOnboarded();
+    setShowOnboarding(false);
+  }
 
   const audioRef       = useRef(null);
   const requestIdRef   = useRef(0);
@@ -810,6 +1143,19 @@ export default function App() {
   const velgNrkCb     = useCallback(velgNrk,     [nrkCovers, source, activeItem, isWide]);
   const velgSpotifyCb = useCallback(velgSpotify, [auth, spotifyCovers, source, activeItem, isWide]);
 
+  // ── Mini-modus: filtrer seksjoner til kun valgte items ──────────
+  const visibleNrkSections = mode === "mini"
+    ? NRK_SECTIONS
+        .map(s => ({ ...s, items: s.items.filter(i => miniIds.includes(i.id)) }))
+        .filter(s => s.items.length > 0)
+    : NRK_SECTIONS;
+
+  const visibleSpotifySection = mode === "mini"
+    ? { ...SPOTIFY_SECTION, items: SPOTIFY_SECTION.items.filter(i => miniIds.includes(i.id)) }
+    : SPOTIFY_SECTION;
+
+  const showSpotifySection = SHOW_SPOTIFY && (mode === "junior" || visibleSpotifySection.items.length > 0);
+
   return (
     <div style={{ minHeight:"100vh", fontFamily:"'Nunito',system-ui,sans-serif", position:"relative" }}>
       <style>{`
@@ -823,7 +1169,24 @@ export default function App() {
         .pb-row::-webkit-scrollbar { display:none }
       `}</style>
 
-      <SkyBg />
+      {showOnboarding && <Onboarding onDone={handleOnboardingDone} />}
+
+      {showPinModal && (
+        <ParentPinModal
+          onSuccess={() => { setShowPinModal(false); setShowParentPanel(true); }}
+          onCancel={() => setShowPinModal(false)}
+        />
+      )}
+
+      {showParentPanel && (
+        <ParentPanel
+          mode={mode} setMode={setMode}
+          miniIds={miniIds} setMiniIds={setMiniIds}
+          onClose={() => setShowParentPanel(false)}
+        />
+      )}
+
+      <SkyBg onSunTap={handleSunTap} />
       <audio ref={audioRef} />
 
       {showVoksen && <SpotifyVoksenModal onRetry={handleVoksenRetry} onDismiss={() => setShowVoksen(false)} />}
@@ -842,11 +1205,13 @@ export default function App() {
               <h1 style={{ fontSize:"1.6rem", fontWeight:900, color:"#1B4D5C", margin:"0.2rem 0 0" }}>Pleiboksen</h1>
               <p style={{ fontSize:"0.78rem", fontWeight:700, color:"#1B4D5C", opacity:0.5, margin:0 }}>Hva vil du høre?</p>
             </div>
-            {NRK_SECTIONS.map((section) => (
+            {visibleNrkSections.map((section) => (
               <PbSection key={section.id} section={section} covers={nrkCovers} activeId={activeItem?.id} activeSource={source} playing={playing} onSelect={(item) => velgNrkCb(item, section)} />
             ))}
-            <PbSection section={SPOTIFY_SECTION} covers={spotifyCovers} activeId={activeItem?.id} activeSource={source} playing={playing} onSelect={velgSpotifyCb} />
-            {!auth?.loggedIn && <p style={{ color:"#888", fontSize:"0.75rem", fontWeight:700, textAlign:"center", marginTop:-4, marginBottom:12 }}>🔒 Trykk på en Kutoppen-sang for å koble til Spotify</p>}
+            {showSpotifySection && (
+              <PbSection section={visibleSpotifySection} covers={spotifyCovers} activeId={activeItem?.id} activeSource={source} playing={playing} onSelect={velgSpotifyCb} />
+            )}
+            {showSpotifySection && !auth?.loggedIn && <p style={{ color:"#888", fontSize:"0.75rem", fontWeight:700, textAlign:"center", marginTop:-4, marginBottom:12 }}>🔒 Trykk på en sang for å koble til Spotify</p>}
           </div>
         </div>
       ) : (
@@ -862,11 +1227,20 @@ export default function App() {
               <p style={{ fontSize:"0.8rem", fontWeight:700, color:"#1B4D5C", opacity:0.5, margin:0 }}>Hva vil du høre?</p>
             </div>
             <div style={{ padding:"0.2rem 1.1rem 0" }}>
-              {NRK_SECTIONS.map((section) => (
+              {visibleNrkSections.length === 0 && mode === "mini" && (
+                <div style={{ textAlign:"center", padding:"40px 20px", color:"#1B4D5C99" }}>
+                  <div style={{ fontSize:40, marginBottom:10 }}>🌱</div>
+                  <div style={{ fontWeight:800, fontSize:14 }}>Ingen innhold valgt ennå.</div>
+                  <div style={{ fontWeight:700, fontSize:12, marginTop:4 }}>En voksen kan velge innhold i foreldrepanelet.</div>
+                </div>
+              )}
+              {visibleNrkSections.map((section) => (
                 <PbSection key={section.id} section={section} covers={nrkCovers} activeId={activeItem?.id} activeSource={source} playing={playing} onSelect={(item) => velgNrkCb(item, section)} />
               ))}
-              <PbSection section={SPOTIFY_SECTION} covers={spotifyCovers} activeId={activeItem?.id} activeSource={source} playing={playing} onSelect={velgSpotifyCb} />
-              {!auth?.loggedIn && <p style={{ color:"#888", fontSize:"0.75rem", fontWeight:700, textAlign:"center", marginTop:-4, marginBottom:12 }}>🔒 Trykk på en Kutoppen-sang for å koble til Spotify</p>}
+              {showSpotifySection && (
+                <PbSection section={visibleSpotifySection} covers={spotifyCovers} activeId={activeItem?.id} activeSource={source} playing={playing} onSelect={velgSpotifyCb} />
+              )}
+              {showSpotifySection && !auth?.loggedIn && <p style={{ color:"#888", fontSize:"0.75rem", fontWeight:700, textAlign:"center", marginTop:-4, marginBottom:12 }}>🔒 Trykk på en sang for å koble til Spotify</p>}
             </div>
           </div>
           {activeItem && !fullscreen && (
