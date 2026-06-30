@@ -666,15 +666,16 @@ function GlowRing({ radius, mini = false }) {
 }
 
 // ── Coverbilde ────────────────────────────────────────────────────
-function CoverImg({ item, sectionColor, size, radius, playing, onClick, mini = false }) {
+function CoverImg({ item, sectionColor, size, width, radius, playing, onClick, mini = false }) {
   const [err, setErr] = useState(false);
   const t   = mini ? 2.5 : 5;
   const g   = mini ? 4   : 10;
   const pad = playing ? t + g : 0;
+  const boxW = width || size; // tillater bredformat uten å påvirke GlowRing/høyde
   return (
-    <div onClick={onClick} style={{ position:"relative", width:size+pad*2, height:size+pad*2, display:"flex", alignItems:"center", justifyContent:"center", cursor:onClick?"pointer":"default", flexShrink:0 }}>
+    <div onClick={onClick} style={{ position:"relative", width:boxW+pad*2, height:size+pad*2, display:"flex", alignItems:"center", justifyContent:"center", cursor:onClick?"pointer":"default", flexShrink:0 }}>
       {playing && onClick && <GlowRing radius={radius} mini={mini} />}
-      <div style={{ width:size, height:size, borderRadius:radius, overflow:"hidden", background:sectionColor, display:"flex", alignItems:"center", justifyContent:"center", position:"relative", zIndex:1, flexShrink:0 }}>
+      <div style={{ width:boxW, height:size, borderRadius:radius, overflow:"hidden", background:sectionColor, display:"flex", alignItems:"center", justifyContent:"center", position:"relative", zIndex:1, flexShrink:0 }}>
         {item.cover && !err
           ? <img src={item.cover} alt={item.title} onError={()=>setErr(true)} style={{ width:"100%", height:"100%", objectFit:"contain", display:"block" }} />
           : <span style={{ fontSize:size*0.46 }}>{item.emoji}</span>
@@ -697,7 +698,7 @@ function FullPlayer({ item, section, source, playing, loading, progress, duratio
         {source === "spotify" ? "Kutoppen · Spotify" : "NRK Super"}
       </div>
       <div style={{ position:"relative", zIndex:1, marginBottom:"1.6rem" }}>
-        <CoverImg item={item} sectionColor={section.color} size={290} radius={28} playing={playing} onClick={onClose} mini={false} />
+        <CoverImg item={item} sectionColor={section.color} size={236} width={300} radius={28} playing={playing} onClick={onClose} mini={false} />
       </div>
       <div style={{ position:"relative", zIndex:1, width:"100%", textAlign:"left", marginBottom:"auto" }}>
         <div style={{ color:"#fff", fontSize:"1.5rem", fontWeight:900, lineHeight:1.2, marginBottom:4 }}>{item.title}</div>
@@ -742,6 +743,28 @@ function cardTilt(id, range = 2.2) {
   return (t - 0.5) * 2 * range; // -range..+range grader
 }
 
+// "Klipp-ut"-hjørner: en SVG clip-path med litt ujevne, håndtegnede
+// kurver i stedet for perfekt geometrisk border-radius. Deterministisk
+// per ID slik at samme kort alltid får samme (subtilt unike) form.
+function clipPathStyle(id) {
+  let hash = 0;
+  for (let i = 0; i < id.length; i++) hash = (hash * 31 + id.charCodeAt(i)) | 0;
+  const seed = Math.abs(hash);
+  // 4 hjørne-"bites" med litt variasjon i hvor langt de stikker inn
+  const a = 2 + (seed % 3);          // 2-4%
+  const b = 2 + ((seed >> 3) % 3);   // 2-4%
+  const c = 2 + ((seed >> 6) % 3);
+  const d = 2 + ((seed >> 9) % 3);
+  return {
+    clipPath: `polygon(
+      ${a}% 0%, ${100-b}% 0%,
+      100% ${b}%, 100% ${100-c}%,
+      ${100-c}% 100%, ${d}% 100%,
+      0% ${100-d}%, 0% ${a}%
+    )`,
+  };
+}
+
 const MiniCard = memo(function MiniCard({ item, section, isActive, playing, onClick }) {
   const [err, setErr] = useState(false);
   const tilt = cardTilt(item.id, 2.4);
@@ -759,12 +782,13 @@ const MiniCard = memo(function MiniCard({ item, section, isActive, playing, onCl
     }}>
       <div style={{
         width:"100%", aspectRatio:"4 / 3",
-        background: item.cover ? undefined : `linear-gradient(135deg, ${section.color}, ${section.accent}22)`,
+        background: item.cover ? section.color : `linear-gradient(135deg, ${section.color}, ${section.accent}22)`,
         display:"flex", alignItems:"center", justifyContent:"center",
         position:"relative", overflow:"hidden",
+        ...clipPathStyle(item.id),
       }}>
         {item.cover && !err
-          ? <img src={item.cover} alt={item.title} onError={()=>setErr(true)} style={{ width:"100%", height:"100%", objectFit:"cover" }} />
+          ? <img src={item.cover} alt={item.title} onError={()=>setErr(true)} style={{ width:"100%", height:"100%", objectFit:"contain" }} />
           : <span style={{ fontSize:84 }}>{item.emoji}</span>
         }
         {isActive && playing && (
@@ -813,7 +837,7 @@ const PbCard = memo(function PbCard({ item, section, isActive, playing, onClick 
       animation: (isActive && playing) ? "cardBreathePb 2.6s ease-in-out infinite" : "none",
       scrollSnapAlign:"start",
     }}>
-      <div style={{ width:"100%", aspectRatio:"1", background:section.color, display:"flex", alignItems:"center", justifyContent:"center", position:"relative", overflow:"hidden" }}>
+      <div style={{ width:"100%", aspectRatio:"1", background:section.color, display:"flex", alignItems:"center", justifyContent:"center", position:"relative", overflow:"hidden", ...clipPathStyle(item.id) }}>
         {item.cover && !err
           ? <img src={item.cover} alt={item.title} onError={()=>setErr(true)} style={{ width:"100%", height:"100%", objectFit:"contain", display:"block" }} />
           : <span style={{ fontSize:42 }}>{item.emoji}</span>
@@ -899,7 +923,7 @@ const IpadPlayer = memo(function IpadPlayer({ activeItem, activeSection, source,
         </div>
         <div style={{ flex:1, display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center", padding:"20px 0 12px" }}>
           <div style={{ marginBottom:28 }}>
-            <CoverImg item={activeItem} sectionColor={activeSection.color} size={270} radius={24} playing={playing} onClick={undefined} mini={false} />
+            <CoverImg item={activeItem} sectionColor={activeSection.color} size={220} width={280} radius={24} playing={playing} onClick={undefined} mini={false} />
           </div>
           <div style={{ width:"100%", textAlign:"center" }}>
             <div style={{ color:"#fff", fontSize:"1.45rem", fontWeight:900, lineHeight:1.2, marginBottom:6 }}>{activeItem.title}</div>
