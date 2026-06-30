@@ -91,16 +91,29 @@ function parseDuration(str) {
   return isNaN(n) ? null : n;
 }
 
+// Normaliser tittel for robust sammenligning: små bokstaver, fjern
+// spesialtegn (?!.,) og normaliser mellomrom. Gjør matching tolerant
+// for små avvik i tegnsetting mellom vår katalog og NRK sin feed.
+function normalizeTitle(s) {
+  return s
+    .toLowerCase()
+    .normalize("NFKD")
+    .replace(/[?!.,:;'"’]/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
 export async function fetchRssAudioUrl(rssUrl, episodeTitle) {
   const { items } = await fetchRssFeed(rssUrl);
-  const lower = episodeTitle.toLowerCase();
+  const target = normalizeTitle(episodeTitle);
 
-  const ep =
-    items.find(e => e.title.toLowerCase() === lower) ||
-    items.find(e => e.title.toLowerCase().includes(lower)) ||
-    items.find(e => lower.includes(e.title.toLowerCase()));
+  // KUN eksakt match (etter normalisering). Ingen "includes"-fallback —
+  // den ga falske positiver mot den første episoden i feeden uansett søk.
+  const ep = items.find(e => normalizeTitle(e.title) === target);
 
-  if (!ep?.audioUrl) throw new Error(`Episode ikke funnet i RSS: ${episodeTitle}`);
+  if (!ep?.audioUrl) {
+    throw new Error(`Episode ikke funnet i RSS: "${episodeTitle}"`);
+  }
   return ep.audioUrl;
 }
 
