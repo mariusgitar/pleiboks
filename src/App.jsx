@@ -1010,11 +1010,11 @@ export default function App() {
 
             section.items.forEach(item => {
               // Finn episode i feed ved eksakt eller delvis tittel-match
-              const titleLower = item.title.toLowerCase();
-              const feedEp =
-                feedItems.find(ep => ep.title.toLowerCase() === titleLower) ||
-                feedItems.find(ep => ep.title.toLowerCase().includes(titleLower)) ||
-                feedItems.find(ep => titleLower.includes(ep.title.toLowerCase()));
+              // Samme normalisering som rss.js sin fetchRssAudioUrl —
+              // KUN eksakt match, ingen "includes"-fallback (ga falske treff).
+              const norm = s => s.toLowerCase().normalize("NFKD").replace(/[?!.,:;'’]/g, "").replace(/\s+/g, " ").trim();
+              const titleNorm = norm(item.title);
+              const feedEp = feedItems.find(ep => norm(ep.title) === titleNorm);
 
               // Episodespesifikt cover > serie-cover fra feed-header
               map[item.id] = feedEp?.cover || sectionCover || null;
