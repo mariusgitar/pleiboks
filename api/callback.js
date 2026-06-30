@@ -1,5 +1,5 @@
 export default async function handler(req, res) {
-  const { code } = req.query;
+  const { code, state } = req.query;
   if (!code) return res.status(400).send("Mangler kode");
 
   const tokenRes = await fetch("https://accounts.spotify.com/api/token", {
@@ -26,5 +26,9 @@ export default async function handler(req, res) {
     `sp_access=${tokens.access_token}; HttpOnly; Secure; SameSite=Lax; Max-Age=${maxAge}; Path=/`,
     `sp_refresh=${tokens.refresh_token}; HttpOnly; Secure; SameSite=Lax; Max-Age=31536000; Path=/`,
   ]);
-  res.redirect("/");
+
+  // Hvis innlogging skjedde fra onboarding-flyten, send tilbake med en
+  // markør Onboarding.jsx/App.jsx kan lese for å hoppe til riktig steg.
+  const redirectUrl = state === "onboarding" ? "/?spotify=connected" : "/";
+  res.redirect(redirectUrl);
 }
