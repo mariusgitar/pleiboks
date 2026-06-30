@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html lang="no">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Pleiboks Helsesjekk</title>
+  <style>
+    body { font-family: system-ui; padding: 20px; background: #111; color: #fff; max-width: 600px; margin: 0 auto; }
+    h2 { margin-bottom: 4px; }
+    .sub { color: #888; font-size: 13px; margin-bottom: 20px; }
+    button { padding: 14px 24px; background: #1DB954; color: #fff; border: none; border-radius: 10px; font-size: 15px; font-weight: 800; cursor: pointer; margin-bottom: 16px; }
+    button:disabled { background: #333; color: #666; }
+    .summary { background: #1a1a2e; border-radius: 10px; padding: 16px; margin-bottom: 16px; font-size: 14px; line-height: 1.8; }
+    .row { display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-radius: 8px; margin-bottom: 6px; font-size: 13px; }
+    .ok   { background: #0d2818; color: #6BCB77; }
+    .fail { background: #2a0d0d; color: #FF6B6B; }
+    .pending { background: #1a1a2e; color: #888; }
+    .row b { flex: 1; }
+    .row .meta { font-size: 11px; opacity: 0.7; }
+    .copy-btn { background: #333; color: #fff; border: none; padding: 8px 14px; border-radius: 8px; font-size: 12px; cursor: pointer; margin-top: 12px; }
+  </style>
+</head>
+<body>
+  <h2>🩺 Pleiboks Helsesjekk</h2>
+  <div class="sub">Tester alle RSS-baserte episoder/sanger — finner hva som faktisk spiller</div>
+
+  <button id="btn-run">▶ Kjør full sjekk</button>
+  <div class="summary" id="summary">Trykk for å starte</div>
+  <div id="results"></div>
+  <button class="copy-btn" id="btn-copy" style="display:none">📋 Kopier feilliste</button>
+
+  <script>
+    // ── Samme katalog-struktur som App.jsx (RSS-delen) ──
+    // Oppdater denne listen manuelt når katalogen i App.jsx endres.
+    const RSS_SECTIONS = [
+      {
+        label: "Hallo Bablo", rssUrl: "https://podkast.nrk.no/program/hallo_bablo.rss",
+        items: [
+          "Oversvømmelse", "Ja-dag", "Superlimet", "Lottes banneshow",
+          "Fiskoteket", "Dinosaurmysteriet", "Det snør inne",
+          "Hva er inni det store egget?", "Lotte leker død",
+          "Bremsespor-mysteriet", "Fantasibygging",
+        ],
+      },
+      {
+        label: "Kokosbananas", rssUrl: "https://podkast.nrk.no/program/kokosbananas.rss",
+        items: ["Superdupersykkelen", "Melonhvalen", "Bråkebyrået"],
+      },
+      {
+        label: "Fantorangenfortellinger", rssUrl: "https://podkast.nrk.no/program/fantorangenfortellinger.rss",
+        items: ["Gøy natt"],
+      },
+      {
+        label: "Brannbamsen Bjørnis", rssUrl: "https://podkast.nrk.no/program/brannbamsen_bjoernis.rss",
+        items: ["Fingeren sitter fast", "Tatt av vinden", "På biblioteket", "Hund i fare", "Tur på stranda"],
+      },
+    ];
+
+    function log(msg, cls) {
+      const el = document.createElement("div");
+      el.className = "row " + cls;
+      el.innerHTML = msg;
+      document.getElementById("results").appendChild(el);
+    }
+
+    function matchTitle(items, target) {
+      const lower = target.toLowerCase();
+      return (
+        items.find(e => e.title.toLowerCase() === lower) ||
+        items.find(e => e.title.toLowerCase().includes(lower)) ||
+        items.find(e => lower.includes(e.title.toLowerCase())) ||
+        null
+      );
+    }
+
+    function parseRss(xmlText) {
+      const cleaned = xmlText.replace(/itunes:/g, "itunes_").replace(/media:/g, "media_");
+      const parser = new DOMParser();
+      const doc = parser.parseFromString(cleaned, "text/xml");
+      const items = Array.from(doc.querySelectorAll("item")).map(item => {
+        const enclosure = item.querySelector("enclosure");
+        return {
+          title: item.querySelector("title")?.textContent?.trim() || "",
+          audioUrl: enclosure?.getAttribute("url") || null,
+        };
+      }).filter(e => e.audioUrl);
+      return items;
+    }
+
+    const failures = [];
+
+    document.getElementById("btn-run").addEventListener("click", async () => {
+      document.getElementById("btn-run").disabled = true;
+      document.getElementById("results").innerHTML = "";
+      failures.length = 0;
+      let total = 0, ok = 0, fail = 0;
+
+      for (const section of RSS_SECTIONS) {
+        log(`<b>━━ ${section.label} ━━</b>`, "pending");
+
+        let feedItems;
+        try {
+          const res = await fetch(`/api/rss?url=${encodeURIComponent(section.rssUrl)}`);
+          if (!res.ok) {
+            log(`<b>${section.label}</b><span class="meta">Feed selv feiler: HTTP ${res.status}</span>`, "fail");
+            section.items.forEach(title => {
+              total++; fail++;
+              failures.push(`${section.label} → "${title}" (feed utilgjengelig)`);
+            });
+            continue;
+          }
+          const text = await res.text();
+          feedItems = parseRss(text);
+        } catch (e) {
+          log(`<b>${section.label}</b><span class="meta">Nettverksfeil: ${e.message}</span>`, "fail");
+          continue;
+        }
+
+        for (const title of section.items) {
+          total++;
+          const match = matchTitle(feedItems, title);
+          if (match && match.audioUrl) {
+            ok++;
+            log(`<b>${title}</b><span class="meta">✓ funnet, lyd OK</span>`, "ok");
+          } else {
+            fail++;
+            failures.push(`${section.label} → "${title}"`);
+            log(`<b>${title}</b><span class="meta">✗ IKKE FUNNET i feed</span>`, "fail");
+          }
+        }
+      }
+
+      const summary = document.getElementById("summary");
+      summary.innerHTML = `
+        <b>Resultat:</b> ${ok} av ${total} fungerer (${fail} feiler)<br>
+        ${fail > 0 ? `<span style="color:#FF6B6B">⚠ ${fail} episoder bør byttes til psapi eller fjernes</span>` : `<span style="color:#6BCB77">✓ Alt fungerer!</span>`}
+      `;
+
+      if (fail > 0) {
+        document.getElementById("btn-copy").style.display = "block";
+        document.getElementById("btn-copy").onclick = () => {
+          navigator.clipboard.writeText(failures.join("\\n"));
+          alert("Feilliste kopiert!");
+        };
+      }
+
+      document.getElementById("btn-run").disabled = false;
+    });
+  </script>
+</body>
+</html>
