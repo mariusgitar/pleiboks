@@ -676,7 +676,7 @@ function CoverImg({ item, sectionColor, size, radius, playing, onClick, mini = f
       {playing && onClick && <GlowRing radius={radius} mini={mini} />}
       <div style={{ width:size, height:size, borderRadius:radius, overflow:"hidden", background:sectionColor, display:"flex", alignItems:"center", justifyContent:"center", position:"relative", zIndex:1, flexShrink:0 }}>
         {item.cover && !err
-          ? <img src={item.cover} alt={item.title} onError={()=>setErr(true)} style={{ width:"100%", height:"100%", objectFit:"cover", display:"block" }} />
+          ? <img src={item.cover} alt={item.title} onError={()=>setErr(true)} style={{ width:"100%", height:"100%", objectFit:"contain", display:"block" }} />
           : <span style={{ fontSize:size*0.46 }}>{item.emoji}</span>
         }
       </div>
@@ -697,7 +697,7 @@ function FullPlayer({ item, section, source, playing, loading, progress, duratio
         {source === "spotify" ? "Kutoppen · Spotify" : "NRK Super"}
       </div>
       <div style={{ position:"relative", zIndex:1, marginBottom:"1.6rem" }}>
-        <CoverImg item={item} sectionColor={section.color} size={220} radius={24} playing={playing} onClick={onClose} mini={false} />
+        <CoverImg item={item} sectionColor={section.color} size={290} radius={28} playing={playing} onClick={onClose} mini={false} />
       </div>
       <div style={{ position:"relative", zIndex:1, width:"100%", textAlign:"left", marginBottom:"auto" }}>
         <div style={{ color:"#fff", fontSize:"1.5rem", fontWeight:900, lineHeight:1.2, marginBottom:4 }}>{item.title}</div>
@@ -732,8 +732,19 @@ function FullPlayer({ item, section, source, playing, loading, progress, duratio
 // Disse tar IKKE progress/duration som props — rendres bare når
 // activeid, playing eller covers endrer seg.
 // ── Mini-modus: store kort, vertikal scroll (prototype-I-stil) ───
+// Deterministisk liten rotasjon per kort basert på ID — gir lekenhet
+// uten at kortene hopper rundt ved re-render. Aktive/spillende kort
+// retter seg opp (rotate(0)) for å skille seg ut.
+function cardTilt(id, range = 2.2) {
+  let hash = 0;
+  for (let i = 0; i < id.length; i++) hash = (hash * 31 + id.charCodeAt(i)) | 0;
+  const t = (Math.abs(hash) % 1000) / 1000; // 0..1
+  return (t - 0.5) * 2 * range; // -range..+range grader
+}
+
 const MiniCard = memo(function MiniCard({ item, section, isActive, playing, onClick }) {
   const [err, setErr] = useState(false);
+  const tilt = cardTilt(item.id, 2.4);
   return (
     <button onClick={onClick} style={{
       display:"block", width:"100%", textAlign:"left",
@@ -742,7 +753,9 @@ const MiniCard = memo(function MiniCard({ item, section, isActive, playing, onCl
       marginBottom:18, fontFamily:"inherit",
       boxShadow: isActive ? `0 8px 28px ${section.accent}55` : "0 3px 14px rgba(0,0,0,0.10)",
       outline: isActive ? `3px solid ${section.accent}` : "3px solid transparent",
-      transition:"all 0.18s ease",
+      transform: `rotate(${isActive ? 0 : tilt}deg) scale(${isActive ? 1.015 : 1})`,
+      transition:"all 0.22s cubic-bezier(.34,1.4,.64,1)",
+      animation: (isActive && playing) ? "cardBreatheMini 2.6s ease-in-out infinite" : "none",
     }}>
       <div style={{
         width:"100%", aspectRatio:"4 / 3",
@@ -788,19 +801,21 @@ const MiniCard = memo(function MiniCard({ item, section, isActive, playing, onCl
 
 const PbCard = memo(function PbCard({ item, section, isActive, playing, onClick }) {
   const [err, setErr] = useState(false);
+  const tilt = cardTilt(item.id, 3.2);
   return (
     <button onClick={onClick} style={{
       flexShrink:0, width:110, borderRadius:19, overflow:"hidden",
       background:"#fff", border:`3px solid ${isActive ? section.accent : "transparent"}`,
       boxShadow: isActive ? `0 5px 16px ${section.accent}66` : "0 2px 8px rgba(0,0,0,0.09)",
       cursor:"pointer", padding:0, textAlign:"left",
-      transition:"transform 0.14s cubic-bezier(.34,1.56,.64,1), border-color 0.14s",
-      transform: isActive ? "scale(1.05)" : "scale(1)",
+      transition:"transform 0.18s cubic-bezier(.34,1.56,.64,1), border-color 0.14s",
+      transform: isActive ? "rotate(0deg) scale(1.06)" : `rotate(${tilt}deg) scale(1)`,
+      animation: (isActive && playing) ? "cardBreathePb 2.6s ease-in-out infinite" : "none",
       scrollSnapAlign:"start",
     }}>
       <div style={{ width:"100%", aspectRatio:"1", background:section.color, display:"flex", alignItems:"center", justifyContent:"center", position:"relative", overflow:"hidden" }}>
         {item.cover && !err
-          ? <img src={item.cover} alt={item.title} onError={()=>setErr(true)} style={{ width:"100%", height:"100%", objectFit:"cover", display:"block" }} />
+          ? <img src={item.cover} alt={item.title} onError={()=>setErr(true)} style={{ width:"100%", height:"100%", objectFit:"contain", display:"block" }} />
           : <span style={{ fontSize:42 }}>{item.emoji}</span>
         }
         {isActive && playing && (
@@ -884,7 +899,7 @@ const IpadPlayer = memo(function IpadPlayer({ activeItem, activeSection, source,
         </div>
         <div style={{ flex:1, display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center", padding:"20px 0 12px" }}>
           <div style={{ marginBottom:28 }}>
-            <CoverImg item={activeItem} sectionColor={activeSection.color} size={230} radius={22} playing={playing} onClick={undefined} mini={false} />
+            <CoverImg item={activeItem} sectionColor={activeSection.color} size={270} radius={24} playing={playing} onClick={undefined} mini={false} />
           </div>
           <div style={{ width:"100%", textAlign:"center" }}>
             <div style={{ color:"#fff", fontSize:"1.45rem", fontWeight:900, lineHeight:1.2, marginBottom:6 }}>{activeItem.title}</div>
@@ -1291,6 +1306,8 @@ export default function App() {
         @keyframes sunSpin    { from{transform:rotate(0deg)}  to{transform:rotate(360deg)} }
         @keyframes glowSwell  { 0%,100%{opacity:0.6;transform:scale(0.97)} 50%{opacity:0.95;transform:scale(1.03)} }
         @keyframes eqbar      { from{height:3px} to{height:13px} }
+        @keyframes cardBreathePb   { 0%,100%{ transform: rotate(0deg) scale(1.06) }  50%{ transform: rotate(0deg) scale(1.1) } }
+        @keyframes cardBreatheMini { 0%,100%{ transform: rotate(0deg) scale(1.015) } 50%{ transform: rotate(0deg) scale(1.04) } }
         @keyframes bob        { 0%,100%{transform:translateY(0)} 50%{transform:translateY(-7px)} }
         .pb-row::-webkit-scrollbar { display:none }
       `}</style>
