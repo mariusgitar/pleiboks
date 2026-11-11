@@ -49,7 +49,10 @@ async function check([id, title, type]) {
       const t = await fetch(a.url, { headers: { Range: "bytes=0-1" } });
       r.cors = true; r.http = t.status;
       const cr = t.headers.get("content-range");
-      r.size = cr ? parseInt(cr.split("/")[1]) : parseInt(t.headers.get("content-length")) || null;
+      r.size = cr ? parseInt(cr.split("/")[1]) : null;
+      // Content-Range er ikke eksponert via CORS, men Content-Length er alltid lesbar — bruk HEAD
+      if (!r.size) { try { const h = await fetch(a.url, { method: "HEAD" }); r.size = parseInt(h.headers.get("content-length")) || null; } catch {} }
+      if (r.size && r.size < 1000) r.size = null;
     } catch (e) { r.cors = false; }
     if (r.isHls) { r.status = "warn"; r.note = "HLS-strøm (mange små biter) — mer jobb å lagre"; }
     else if (!r.cors) { r.status = "fail"; r.note = "CORS stopper nedlasting fra nettleseren"; }
@@ -72,7 +75,7 @@ $("run").onclick = async () => {
   const total = results.reduce((s, r) => s + (r.status === "ok" ? (r.size || 0) : 0), 0);
   const hosts = [...new Set(results.map(r => r.host).filter(Boolean))].join(", ");
   let est = ""; try { const e = await navigator.storage.estimate(); est = `\nLedig lagring for appen: ca. ${fmtMB(e.quota - e.usage)}`; } catch {}
-  $("sum").textContent = `✅ Kan lagres: ${c("ok")}\n⚠️ HLS: ${c("warn")}\n❌ Feil/CORS: ${c("fail")}\nTotal størrelse (lagringsbare): ${fmtMB(total)}\nVerter: ${hosts}${est}\nNettleser: ${navigator.userAgent}`;
+  $("sum").textContent = `✅ Kan lagres: ${c("ok")}\n⚠️ HLS: ${c("warn")}\n❌ Feil/CORS: ${c("fail")}\nTotal størrelse (lagringsbare): ${fmtMB(total)}  ·  snitt per episode: ${fmtMB(total / Math.max(1, results.filter(r => r.status === "ok" && r.size).length))}\nVerter: ${hosts}${est}\nNettleser: ${navigator.userAgent}`;
   $("run").disabled = false; $("save").disabled = !firstOk;
 };
 
