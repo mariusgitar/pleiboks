@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html lang="no">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Pleiboks Offline-sjekk</title>
+  <style>
+    body { font-family: system-ui; padding: 20px; background: #111; color: #fff; max-width: 640px; margin: 0 auto; }
+    .sub { color: #888; font-size: 13px; margin-bottom: 20px; }
+    button { padding: 14px 20px; background: #1B6B8A; color: #fff; border: none; border-radius: 10px; font-size: 15px; font-weight: 800; cursor: pointer; margin: 0 8px 12px 0; }
+    button:disabled { background: #333; color: #666; }
+    .summary { background: #1a1a2e; border-radius: 10px; padding: 16px; margin-bottom: 16px; font-size: 14px; line-height: 1.7; white-space: pre-wrap; }
+    .row { padding: 10px 12px; border-radius: 8px; margin-bottom: 6px; font-size: 13px; }
+    .ok { background: #0d2818; color: #6BCB77; } .warn { background: #2a230d; color: #FFD166; } .fail { background: #2a0d0d; color: #FF6B6B; }
+    .meta { font-size: 11px; opacity: 0.75; word-break: break-all; }
+  </style>
+</head>
+<body>
+  <h2>📦 Pleiboks Offline-sjekk</h2>
+  <div class="sub">Sjekker for hver episode: lydformat, hvor fila ligger, om nettleseren får lov til å laste den ned (CORS), og størrelse.</div>
+  <button id="run">▶ Sjekk alle</button>
+  <button id="save" disabled>💾 Test lagring + offline-avspilling</button>
+  <button id="copy">📋 Kopier rapport</button>
+  <div class="summary" id="sum">Ikke kjørt ennå.</div>
+  <audio id="player" controls style="width:100%;margin-bottom:12px;display:none"></audio>
+  <div id="list"></div>
+<script>
+const ITEMS = [["l_b9a1151b-f64b-4658-a115-1bf64ba658f9", "Oversvømmelse", "podcast"], ["l_fbd86653-d114-44a4-9866-53d11464a4ae", "Ja-dag", "podcast"], ["l_8172372d-510a-49d6-b237-2d510af9d6ac", "Superlimet", "podcast"], ["l_e6b980ce-8601-476a-b980-ce8601176a46", "Lottes banneshow", "podcast"], ["l_9a5246e8-8e2b-4966-9246-e88e2b1966ca", "Fiskoteket", "podcast"], ["l_135ec467-a256-4053-9ec4-67a25660539d", "Dinosaurmysteriet", "podcast"], ["l_e61edd4f-9d75-430e-9edd-4f9d75e30e50", "Det snør inne", "podcast"], ["l_af64b356-d05c-4cd6-a4b3-56d05cacd6b7", "Hva er inni det store egget?", "podcast"], ["l_02e63def-dabd-4f1e-a63d-efdabd5f1e26", "Lotte leker død", "podcast"], ["l_01e1ebbe-fe80-4e98-a1eb-befe804e98ba", "Bremsespor-mysteriet", "podcast"], ["l_6e7a2e2c-44f3-4660-ba2e-2c44f366607f", "Fantasibygging", "podcast"], ["l_810de249-e5d3-4a12-8de2-49e5d33a12d2", "Superdupersykkelen", "podcast"], ["l_cb5acb0d-1284-47d0-9acb-0d128447d0c2", "Melonhvalen", "podcast"], ["l_c1919e6d-7311-4cae-919e-6d7311dcae09", "Bråkebyrået", "podcast"], ["l_8e42fb20-bb6f-404c-82fb-20bb6f004c5f", "Kjempe-Fantus", "podcast"], ["l_01779e9e-49ad-41ff-b79e-9e49ad11ffc0", "Fantus forsvinn", "podcast"], ["l_9124669c-0fc4-4660-a466-9c0fc4b6609a", "Tryllerydding", "podcast"], ["l_17d00a92-711b-4bdc-900a-92711b2bdce1", "Gøy natt", "podcast"], ["l_f17536cc-f908-4c2d-b536-ccf908ec2df1", "Bursdagen", "podcast"], ["l_55d4584b-3c22-48a6-9458-4b3c2278a6f4", "Superdropsa", "podcast"], ["l_1d43056a-1d70-40e3-8305-6a1d7090e32d", "Fantorangen sit fast i do", "podcast"], ["MKTT05000605", "Bestevenner", "program"], ["MKTT05000505", "Petra begynner i barnehagen", "program"], ["MKTT04000104", "Karsten kjører brannbil", "program"], ["l_bd313b9d-5f6b-44a1-b13b-9d5f6b84a16b", "Kom igjen 'a", "podcast"], ["l_2ae9578e-b9ef-4451-a957-8eb9ef0451f2", "Halloween", "podcast"], ["l_184d0d69-e4ba-4316-8d0d-69e4bad3165a", "Kua mi", "podcast"], ["l_227c72ee-f0d8-477e-bc72-eef0d8877e3e", "Ferdig snakka", "podcast"], ["l_ee431198-066e-4814-8311-98066e98148b", "Være med", "podcast"], ["l_ff643c27-b82e-44bd-a43c-27b82e34bd5f", "Sveve høyt", "podcast"], ["l_2a2d7975-67b3-48e2-ad79-7567b3c8e2ba", "Dynamitt", "podcast"], ["l_d8d2e266-5ed9-41e0-92e2-665ed9b1e074", "Ser deg", "podcast"], ["l_25663b06-aad8-4b84-a63b-06aad84b841a", "Hjulene på bussen", "podcast"], ["l_704cb2d9-785e-4907-8cb2-d9785e490790", "Ma me mo", "podcast"], ["l_7514e801-f102-40bf-94e8-01f10200bffb", "Eggesangen", "podcast"], ["l_d121604d-3d7f-4c8c-a160-4d3d7f9c8cc9", "Fader Jakob", "podcast"], ["l_a0ef8d4a-c61d-4009-af8d-4ac61d3009ad", "Klappesangen", "podcast"], ["l_b34a81e1-a911-4824-8a81-e1a9118824e2", "Snibel Snabel", "podcast"], ["l_d2c4eeae-55c8-4cfc-84ee-ae55c80cfc0d", "Tannpussesangen", "podcast"], ["l_08f018af-0656-48dd-b018-af065638ddd4", "Sjøbanan", "podcast"], ["l_6c29c28c-69a1-43ef-a9c2-8c69a1b3efab", "Ryddesang", "podcast"], ["l_5e1b5f7f-abe9-4c8a-9b5f-7fabe9bc8a9f", "Tallsangen", "podcast"], ["l_7733df85-6d87-4e44-b3df-856d876e44cb", "Bæsjesangen", "podcast"], ["l_a860e8cf-d13d-4bd3-a0e8-cfd13d4bd3b1", "Fingeren sitter fast", "podcast"]];
+const $ = (id) => document.getElementById(id);
+const results = [];
+let firstOk = null;
+
+function fmtMB(b) { return b ? (b / 1048576).toFixed(1) + " MB" : "?"; }
+
+async function check([id, title, type]) {
+  const r = { id, title, type };
+  try {
+    const res = await fetch(`/api/manifest?id=${id}&type=${type}`);
+    if (!res.ok) throw new Error("manifest HTTP " + res.status);
+    const d = await res.json();
+    const assets = d?.playable?.assets || [];
+    r.formats = assets.map(a => a.format + (a.mimeType ? " (" + a.mimeType + ")" : "")).join(", ") || "ingen";
+    const a = assets.find(x => x.format === "MP3") || assets[0];
+    if (!a?.url) { r.status = "fail"; r.note = "Ingen spillbar fil" + (d?.nonPlayable?.reason ? ": " + d.nonPlayable.reason : ""); return r; }
+    r.url = a.url; r.host = new URL(a.url).host;
+    r.isHls = /m3u8|hls/i.test(a.url + a.format + (a.mimeType || ""));
+    // CORS-test: hent bare 2 bytes. Range med ett intervall krever ikke preflight.
+    try {
+      const t = await fetch(a.url, { headers: { Range: "bytes=0-1" } });
+      r.cors = true; r.http = t.status;
+      const cr = t.headers.get("content-range");
+      r.size = cr ? parseInt(cr.split("/")[1]) : parseInt(t.headers.get("content-length")) || null;
+    } catch (e) { r.cors = false; }
+    if (r.isHls) { r.status = "warn"; r.note = "HLS-strøm (mange små biter) — mer jobb å lagre"; }
+    else if (!r.cors) { r.status = "fail"; r.note = "CORS stopper nedlasting fra nettleseren"; }
+    else { r.status = "ok"; r.note = "Kan lagres offline"; if (!firstOk) firstOk = r; }
+  } catch (e) { r.status = "fail"; r.note = e.message; }
+  return r;
+}
+
+function render(r) {
+  const div = document.createElement("div");
+  div.className = "row " + r.status;
+  div.innerHTML = `<b>${r.title}</b> — ${r.note}<div class="meta">${r.type} · ${r.formats || ""} · ${r.host || ""} · ${fmtMB(r.size)}${r.http ? " · HTTP " + r.http : ""}</div>`;
+  $("list").appendChild(div);
+}
+
+$("run").onclick = async () => {
+  $("run").disabled = true; $("list").innerHTML = ""; results.length = 0; firstOk = null;
+  for (const it of ITEMS) { const r = await check(it); results.push(r); render(r); $("sum").textContent = `Sjekket ${results.length}/${ITEMS.length} …`; }
+  const c = s => results.filter(r => r.status === s).length;
+  const total = results.reduce((s, r) => s + (r.status === "ok" ? (r.size || 0) : 0), 0);
+  const hosts = [...new Set(results.map(r => r.host).filter(Boolean))].join(", ");
+  let est = ""; try { const e = await navigator.storage.estimate(); est = `\nLedig lagring for appen: ca. ${fmtMB(e.quota - e.usage)}`; } catch {}
+  $("sum").textContent = `✅ Kan lagres: ${c("ok")}\n⚠️ HLS: ${c("warn")}\n❌ Feil/CORS: ${c("fail")}\nTotal størrelse (lagringsbare): ${fmtMB(total)}\nVerter: ${hosts}${est}\nNettleser: ${navigator.userAgent}`;
+  $("run").disabled = false; $("save").disabled = !firstOk;
+};
+
+$("save").onclick = async () => {
+  const r = firstOk; $("save").disabled = true;
+  try {
+    let persisted = false; try { persisted = await navigator.storage.persist(); } catch {}
+    $("sum").textContent = `Laster ned «${r.title}» (${fmtMB(r.size)}) …`;
+    const res = await fetch(r.url);
+    if (!res.ok) throw new Error("HTTP " + res.status);
+    const blob = await res.blob();
+    const cache = await caches.open("pleiboks-offline-test");
+    await cache.put("/offline-test/" + r.id, new Response(blob, { headers: { "Content-Type": blob.type || "audio/mpeg" } }));
+    const back = await (await cache.match("/offline-test/" + r.id)).blob();
+    const p = $("player"); p.style.display = "block"; p.src = URL.createObjectURL(back);
+    $("sum").textContent = `✅ Lagret ${fmtMB(back.size)} i Cache API og spilt fra lokal kopi.\nVarig lagring innvilget: ${persisted ? "ja" : "nei"}\nTips: slå på flymodus, last siden på nytt og trykk knappen igjen — eller bare trykk play nå.`;
+  } catch (e) { $("sum").textContent = "❌ Lagring feilet: " + e.message; }
+  $("save").disabled = false;
+};
+
+$("copy").onclick = () => {
+  const txt = $("sum").textContent + "\n\n" + results.map(r => `${r.status.toUpperCase()} | ${r.title} | ${r.type} | ${r.formats || ""} | ${r.host || ""} | ${fmtMB(r.size)} | ${r.note}`).join("\n");
+  navigator.clipboard.writeText(txt).then(() => { $("copy").textContent = "✓ Kopiert"; });
+};
+</script>
+</body>
+</html>
