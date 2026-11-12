@@ -71,7 +71,9 @@ const SHOW_SPOTIFY = true;
 const PARENT_PIN = "1234";
 
 const LS_KEYS = {
-  mode:          "pb_mode",            // "mini" | "junior"
+  mode:          "pb_mode",            // "mini" | "miniplus" | "junior"
+  miniplusSerier:"pb_miniplus_serier", // JSON array av seksjons-IDer (maks 5, i fane-rekkefølge)
+  miniplusStil:  "pb_miniplus_stil",   // "cover" | "ikon" — hva seriefanene viser
   miniIds:       "pb_mini_ids",        // JSON array av valgte item-IDer
   onboarded:     "pb_onboarded",       // "1" når onboarding er fullført
   spotifyEnabled:"pb_spotify_enabled", // "1" | "0" — global bryter for begge moduser
@@ -93,6 +95,13 @@ function loadMiniIds() {
 function saveMiniIds(ids) {
   try { localStorage.setItem(LS_KEYS.miniIds, JSON.stringify(ids)); } catch {}
 }
+function loadJson(key, fallback) {
+  try { const raw = localStorage.getItem(key); return raw ? JSON.parse(raw) : fallback; } catch { return fallback; }
+}
+function saveJson(key, value) {
+  try { localStorage.setItem(key, JSON.stringify(value)); } catch {}
+}
+const MAKS_SERIER = 5;
 function loadOnboarded() {
   try { return localStorage.getItem(LS_KEYS.onboarded) === "1"; }
   catch { return false; }
@@ -349,7 +358,7 @@ function ParentPinModal({ onSuccess, onCancel }) {
 }
 
 // ── Foreldrepanel: bytt modus og velg Mini-utvalg ─────────────────
-function ParentPanel({ nrkSections, offline, mode, setMode, miniIds, setMiniIds, spotifyEnabled, setSpotifyEnabled, onClose }) {
+function ParentPanel({ nrkSections, offline, mode, setMode, miniIds, setMiniIds, miniplusSerier, setMiniplusSerier, miniplusStil, setMiniplusStil, spotifyEnabled, setSpotifyEnabled, onClose }) {
   function toggleItem(id) {
     setMiniIds(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]);
   }
@@ -422,33 +431,67 @@ function ParentPanel({ nrkSections, offline, mode, setMode, miniIds, setMiniIds,
         {/* Modusvalg */}
         <div style={{ marginBottom:28 }}>
           <div style={{ fontWeight:900, fontSize:15, color:"#1a1a1a", marginBottom:10 }}>Visningsmodus</div>
-          <div style={{ display:"flex", gap:10 }}>
-            <button onClick={() => setMode("mini")} style={{
-              flex:1, padding:"16px 12px", borderRadius:16,
-              background: mode === "mini" ? "#1B4D5C" : "#fff",
-              color: mode === "mini" ? "#fff" : "#1a1a1a",
-              border: mode === "mini" ? "none" : "2px solid #eee",
-              fontWeight:900, fontSize:14, cursor:"pointer", fontFamily:"inherit",
-              textAlign:"left",
-            }}>
-              <div style={{ fontSize:22, marginBottom:4 }}>🌱</div>
-              Mini
-              <div style={{ fontWeight:700, fontSize:11, opacity:0.7, marginTop:2 }}>Få, store valg</div>
-            </button>
-            <button onClick={() => setMode("junior")} style={{
-              flex:1, padding:"16px 12px", borderRadius:16,
-              background: mode === "junior" ? "#1B4D5C" : "#fff",
-              color: mode === "junior" ? "#fff" : "#1a1a1a",
-              border: mode === "junior" ? "none" : "2px solid #eee",
-              fontWeight:900, fontSize:14, cursor:"pointer", fontFamily:"inherit",
-              textAlign:"left",
-            }}>
-              <div style={{ fontSize:22, marginBottom:4 }}>🌳</div>
-              Junior
-              <div style={{ fontWeight:700, fontSize:11, opacity:0.7, marginTop:2 }}>Hele katalogen</div>
-            </button>
+          <div style={{ display:"flex", gap:8 }}>
+            {[
+              { id:"mini",     ikon:"🌱", navn:"Mini",   tekst:"Få, store valg" },
+              { id:"miniplus", ikon:"🌿", navn:"Mini+",  tekst:"Serier, store kort" },
+              { id:"junior",   ikon:"🌳", navn:"Junior", tekst:"Hele katalogen" },
+            ].map(m => (
+              <button key={m.id} onClick={() => setMode(m.id)} style={{
+                flex:1, padding:"14px 10px", borderRadius:16,
+                background: mode === m.id ? "#1B4D5C" : "#fff",
+                color: mode === m.id ? "#fff" : "#1a1a1a",
+                border: mode === m.id ? "none" : "2px solid #eee",
+                fontWeight:900, fontSize:14, cursor:"pointer", fontFamily:"inherit",
+                textAlign:"left",
+              }}>
+                <div style={{ fontSize:22, marginBottom:4 }}>{m.ikon}</div>
+                {m.navn}
+                <div style={{ fontWeight:700, fontSize:11, opacity:0.7, marginTop:2 }}>{m.tekst}</div>
+              </button>
+            ))}
           </div>
         </div>
+
+        {/* Mini+-utvalg: serier */}
+        {mode === "miniplus" && (
+          <div>
+            <div style={{ fontWeight:900, fontSize:15, color:"#1a1a1a", marginBottom:4 }}>Velg serier for Mini+</div>
+            <div style={{ fontSize:12, color:"#888", fontWeight:700, marginBottom:14 }}>
+              Opptil {MAKS_SERIER}. Rekkefølgen du velger i blir rekkefølgen på fanene.
+            </div>
+            <div style={{ fontWeight:800, fontSize:13, color:"#1a1a1a", marginBottom:6 }}>Fanene viser</div>
+            <div style={{ display:"flex", gap:8, marginBottom:16 }}>
+              {[{ id:"cover", navn:"Coverbilde" }, { id:"ikon", navn:"Ikon" }].map(v => (
+                <button key={v.id} onClick={() => setMiniplusStil(v.id)} style={{
+                  flex:1, padding:"10px", borderRadius:12, fontFamily:"inherit", fontWeight:800, fontSize:13, cursor:"pointer",
+                  background: miniplusStil === v.id ? "#1B4D5C" : "#fff",
+                  color: miniplusStil === v.id ? "#fff" : "#1a1a1a",
+                  border: miniplusStil === v.id ? "none" : "2px solid #eee",
+                }}>{v.navn}</button>
+              ))}
+            </div>
+            {nrkSections.map(section => {
+              const nr = miniplusSerier.indexOf(section.id);
+              const valgt = nr >= 0;
+              const full = !valgt && miniplusSerier.length >= MAKS_SERIER;
+              return (
+                <button key={section.id} disabled={full} onClick={() => setMiniplusSerier(prev => valgt ? prev.filter(x => x !== section.id) : [...prev, section.id])} style={{
+                  display:"flex", alignItems:"center", gap:10, width:"100%", marginBottom:8,
+                  padding:"10px 12px", borderRadius:14, fontFamily:"inherit", cursor: full ? "default" : "pointer",
+                  background:"#fff", border: valgt ? `2.5px solid ${section.accent}` : "2px solid #eee",
+                  opacity: full ? 0.45 : 1, textAlign:"left",
+                }}>
+                  <div style={{ width:30, height:30, borderRadius:9, background:section.accent, display:"flex", alignItems:"center", justifyContent:"center", fontSize:16, flexShrink:0 }}>{section.icon}</div>
+                  <span style={{ flex:1, fontWeight:800, fontSize:14, color:"#1a1a1a" }}>{section.label}</span>
+                  <span style={{ fontSize:12, fontWeight:800, color: valgt ? section.accent : "#aaa" }}>
+                    {valgt ? `#${nr + 1}` : `${section.items.length} ep.`}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+        )}
 
         {/* Mini-utvalg */}
         {mode === "mini" && (
@@ -750,6 +793,97 @@ const MiniGrid = memo(function MiniGrid({ sections, covers, activeId, source, pl
 });
 
 
+// ── Mini+: store kort, gruppert i serier med faste faner øverst ────
+const MiniPlus = memo(function MiniPlus({ sections, covers, stil, activeId, source, playing, onSelectNrk }) {
+  const [aktiv, setAktiv] = useState(() => sections.find(s => s.items.some(i => i.id === activeId))?.id || sections[0]?.id);
+  const markorRef = useRef(null); // usynlig markør rett over fanene
+  const sveip = useRef(null);
+  const [festet, setFestet] = useState(false); // true når fanene ligger fast øverst
+
+  useEffect(() => {
+    const el = markorRef.current;
+    if (!el || typeof IntersectionObserver === "undefined") return;
+    const obs = new IntersectionObserver(([e]) => setFestet(!e.isIntersecting));
+    obs.observe(el);
+    return () => obs.disconnect();
+  }, []);
+  const serie = sections.find(s => s.id === aktiv) || sections[0];
+
+  function bytt(id) {
+    if (id === serie?.id) return;
+    setAktiv(id);
+    // Hopp tilbake til toppen av serien hvis man har scrollet forbi fanene
+    const el = markorRef.current;
+    if (el) {
+      const topp = el.getBoundingClientRect().top + window.scrollY;
+      if (window.scrollY > topp) window.scrollTo(0, topp);
+    }
+  }
+  function onTouchStart(e) { sveip.current = { x: e.touches[0].clientX, y: e.touches[0].clientY }; }
+  function onTouchEnd(e) {
+    const st = sveip.current; sveip.current = null;
+    if (!st || !serie) return;
+    const dx = e.changedTouches[0].clientX - st.x, dy = e.changedTouches[0].clientY - st.y;
+    if (Math.abs(dx) < 70 || Math.abs(dx) < Math.abs(dy) * 1.5) return;
+    const i = sections.findIndex(s => s.id === serie.id), j = i + (dx < 0 ? 1 : -1);
+    if (j >= 0 && j < sections.length) bytt(sections[j].id);
+  }
+
+  if (!serie) return null;
+  return (
+    <div>
+      <div ref={markorRef} style={{ height:1 }} />
+      <div style={{
+        position:"sticky", top:0, zIndex:10, margin:"0 -1.1rem 6px", // Høyre side holdes fri for sola (foreldreinngang), så barnet ikke treffer den i stedet for en fane
+        padding:"calc(10px + env(safe-area-inset-top)) 76px 12px 1.1rem",
+        background: festet ? "linear-gradient(180deg, rgba(174,228,255,0.97) 75%, rgba(174,228,255,0))" : "transparent",
+        transition:"background 0.2s",
+        display:"flex", justifyContent:"center", gap:10,
+      }}>
+        {sections.map(s => {
+          const on = s.id === serie.id;
+          const spillerHer = playing && source === "nrk" && s.items.some(i => i.id === activeId);
+          const cover = stil === "cover" ? s.items.map(i => covers[i.id]).find(Boolean) : null;
+          return (
+            <button key={s.id} onClick={() => bytt(s.id)} style={{
+              position:"relative", flex:"0 1 76px", aspectRatio:"1", padding:0, border:"none", borderRadius:22,
+              overflow:"hidden", cursor:"pointer", background: cover ? "#fff" : s.color,
+              boxShadow: on ? `0 6px 18px ${s.accent}55` : "0 3px 10px rgba(0,0,0,0.12)",
+              outline: on ? `4px solid ${s.accent}` : "none", outlineOffset:-1,
+              opacity: on ? 1 : 0.72, filter: on ? "none" : "saturate(0.75)",
+              transform: on ? "scale(1.06) rotate(0deg)" : `scale(0.86) rotate(${cardTilt(s.id, 3)}deg)`,
+              transition:"transform 0.28s cubic-bezier(.34,1.5,.64,1), opacity 0.2s, filter 0.2s",
+            }}>
+              {cover
+                ? <img src={cover} alt={s.label} style={{ width:"100%", height:"100%", objectFit:"cover", display:"block" }} />
+                : <span style={{ fontSize:38 }}>{s.icon}</span>}
+              {spillerHer && (
+                <span style={{ position:"absolute", bottom:6, left:"50%", marginLeft:-6, width:12, height:12, borderRadius:"50%", background:s.accent, border:"2px solid #fff", animation:"glowSwell 1.2s ease-in-out infinite" }} />
+              )}
+            </button>
+          );
+        })}
+      </div>
+      <div onTouchStart={onTouchStart} onTouchEnd={onTouchEnd}>
+        <div style={{ display:"flex", alignItems:"center", gap:10, margin:"2px 2px 14px" }}>
+          <div style={{ width:34, height:34, borderRadius:10, background:serie.accent, display:"flex", alignItems:"center", justifyContent:"center", fontSize:"1.1rem" }}>{serie.icon}</div>
+          <span style={{ fontSize:"1.15rem", fontWeight:900, color:"#1a1a1a" }}>{serie.label}</span>
+        </div>
+        {serie.items.map(item => (
+          <MiniCard
+            key={item.id}
+            item={{ ...item, cover: covers[item.id] }}
+            section={serie}
+            isActive={activeId === item.id && source === "nrk"}
+            playing={playing}
+            onClick={() => onSelectNrk(item, serie)}
+          />
+        ))}
+      </div>
+    </div>
+  );
+});
+
 // ── iPad spiller — også utenfor App ──────────────────────────────
 const IpadPlayer = memo(function IpadPlayer({ activeItem, activeSection, source, playing, loading, progress, duration, onToggle, onPrev, onNext, onSeek }) {
   if (!activeItem || !activeSection) return null;
@@ -821,6 +955,8 @@ export default function App() {
   // Foreldrekontroll
   const [mode, setModeState]       = useState(() => loadMode());
   const [miniIds, setMiniIdsState] = useState(() => loadMiniIds());
+  const [miniplusSerier, setMiniplusSerierState] = useState(() => loadJson(LS_KEYS.miniplusSerier, []));
+  const [miniplusStil, setMiniplusStilState]     = useState(() => loadJson(LS_KEYS.miniplusStil, "cover"));
   const [spotifyEnabled, setSpotifyEnabledState] = useState(() => loadSpotifyEnabled());
   const [showOnboarding, setShowOnboarding] = useState(() => !loadOnboarded());
   const [showPinModal, setShowPinModal]     = useState(false);
@@ -842,6 +978,14 @@ export default function App() {
   });
 
   function setMode(m)    { setModeState(m); saveMode(m); }
+  function setMiniplusSerier(updater) {
+    setMiniplusSerierState(prev => {
+      const next = typeof updater === "function" ? updater(prev) : updater;
+      saveJson(LS_KEYS.miniplusSerier, next);
+      return next;
+    });
+  }
+  function setMiniplusStil(v) { setMiniplusStilState(v); saveJson(LS_KEYS.miniplusStil, v); }
   function setMiniIds(updater) {
     setMiniIdsState(prev => {
       const next = typeof updater === "function" ? updater(prev) : updater;
@@ -1215,13 +1359,15 @@ export default function App() {
     ? tilgjengeligeSections
         .map(s => ({ ...s, items: s.items.filter(i => miniIds.includes(i.id)) }))
         .filter(s => s.items.length > 0)
+    : mode === "miniplus"
+    ? miniplusSerier.map(id => tilgjengeligeSections.find(s => s.id === id)).filter(Boolean)
     : tilgjengeligeSections;
 
-  const visibleSpotifySection = mode === "mini"
+  const visibleSpotifySection = mode !== "junior"
     ? { ...SPOTIFY_SECTION, items: SPOTIFY_SECTION.items.filter(i => miniIds.includes(i.id)) }
     : SPOTIFY_SECTION;
 
-  const showSpotifySection = SHOW_SPOTIFY && spotifyEnabled && (mode === "junior" || visibleSpotifySection.items.length > 0);
+  const showSpotifySection = SHOW_SPOTIFY && spotifyEnabled && mode !== "miniplus" && (mode === "junior" || visibleSpotifySection.items.length > 0);
 
   return (
     <div style={{ minHeight:"100vh", fontFamily:"'Nunito',system-ui,sans-serif", position:"relative" }}>
@@ -1274,6 +1420,8 @@ export default function App() {
           offline={{ ...offlineStatus(nrkSections), online, antall: nrkSections.reduce((n, s) => n + s.items.length, 0) }}
           mode={mode} setMode={setMode}
           miniIds={miniIds} setMiniIds={setMiniIds}
+          miniplusSerier={miniplusSerier} setMiniplusSerier={setMiniplusSerier}
+          miniplusStil={miniplusStil} setMiniplusStil={setMiniplusStil}
           spotifyEnabled={spotifyEnabled} setSpotifyEnabled={setSpotifyEnabled}
           onClose={() => setShowParentPanel(false)}
         />
@@ -1320,14 +1468,22 @@ export default function App() {
               <p style={{ fontSize:"0.8rem", fontWeight:700, color:"#1B4D5C", opacity:0.5, margin:0 }}>Hva vil du høre?</p>
             </div>
             <div style={{ padding:"0.2rem 1.1rem 0" }}>
-              {visibleNrkSections.length === 0 && (mode !== "mini" || !showSpotifySection || visibleSpotifySection.items.length === 0) && (
+              {visibleNrkSections.length === 0 && (mode === "junior" || !showSpotifySection || visibleSpotifySection.items.length === 0) && (
                 <div style={{ textAlign:"center", padding:"40px 20px", color:"#1B4D5C99" }}>
                   <div style={{ fontSize:40, marginBottom:10 }}>🌱</div>
                   <div style={{ fontWeight:800, fontSize:14 }}>Ingen innhold valgt ennå.</div>
                   <div style={{ fontWeight:700, fontSize:12, marginTop:4 }}>En voksen kan velge innhold i foreldrepanelet.</div>
                 </div>
               )}
-              {mode === "mini" ? (
+              {mode === "miniplus" ? (
+                <MiniPlus
+                  sections={visibleNrkSections}
+                  covers={nrkCovers}
+                  stil={miniplusStil}
+                  activeId={activeItem?.id} source={source} playing={playing}
+                  onSelectNrk={velgNrkCb}
+                />
+              ) : mode === "mini" ? (
                 <MiniGrid
                   sections={[...visibleNrkSections, ...(showSpotifySection ? [visibleSpotifySection] : [])]}
                   covers={{ ...nrkCovers, ...spotifyCovers }}
