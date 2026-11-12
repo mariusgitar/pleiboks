@@ -2,6 +2,7 @@ import { useState, useEffect, useRef, memo, useCallback } from "react";
 import { fetchRssFeed, fetchRssAudioUrl, fetchRssCover } from "./rss.js";
 import Onboarding from "./Onboarding.jsx";
 import STANDARD_EPISODER from "./episoder-standard.json";
+import { synk, lokalUrl, status as offlineStatus, lagredeIder } from "./offline.js";
 
 // ── Innholdsdata ──────────────────────────────────────────────────
 // PSAPI-BASERT VERSJON (stabil, brukt til brukertesting).
@@ -25,6 +26,15 @@ const RSS = {
 // Episodelisten hentes fra /api/episodes (redigeres på /admin.html).
 // episoder-standard.json er reserve: brukes før første henting og hvis nettet er nede.
 const LS_EPISODER = "pb_episoder";
+
+const LS_COVERS = "pb_covers";
+function loadCovers() {
+  try { return JSON.parse(localStorage.getItem(LS_COVERS)) || {}; } catch { return {}; }
+}
+
+function formatMB(bytes) {
+  return bytes >= 1e9 ? (bytes / 1e9).toFixed(1).replace(".", ",") + " GB" : Math.round(bytes / 1e6) + " MB";
+}
 
 function loadEpisoder() {
   try {
@@ -339,7 +349,7 @@ function ParentPinModal({ onSuccess, onCancel }) {
 }
 
 // ── Foreldrepanel: bytt modus og velg Mini-utvalg ─────────────────
-function ParentPanel({ nrkSections, mode, setMode, miniIds, setMiniIds, spotifyEnabled, setSpotifyEnabled, onClose }) {
+function ParentPanel({ nrkSections, offline, mode, setMode, miniIds, setMiniIds, spotifyEnabled, setSpotifyEnabled, onClose }) {
   function toggleItem(id) {
     setMiniIds(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]);
   }
@@ -391,6 +401,22 @@ function ParentPanel({ nrkSections, mode, setMode, miniIds, setMiniIds, spotifyE
               transition:"transform 0.18s",
             }} />
           </button>
+        </div>
+
+        {/* Offline-status */}
+        <div style={{ marginBottom:28, padding:"14px 16px", background:"#fff", borderRadius:16, border:"2px solid #eee" }}>
+          <div style={{ fontWeight:900, fontSize:15, color:"#1a1a1a", marginBottom:4 }}>
+            {offline.lagret === offline.totalt ? "✅" : "⬇️"} Lagret på telefonen
+          </div>
+          <div style={{ fontSize:13, color:"#555", fontWeight:700 }}>
+            {offline.lagret} av {offline.totalt} episoder · {formatMB(offline.bytes)}
+          </div>
+          <div style={{ fontSize:11, color:"#888", fontWeight:700, marginTop:4 }}>
+            {!offline.online ? "Uten nett nå — viser bare lagrede episoder."
+              : offline.lagret < offline.totalt ? "Laster ned på wifi i bakgrunnen mens appen er åpen."
+              : "Alt kan spilles uten nett."}
+            {offline.totalt < offline.antall && ` ${offline.antall - offline.totalt} radioprogram krever nett.`}
+          </div>
         </div>
 
         {/* Modusvalg */}
@@ -775,7 +801,9 @@ const IpadPlayer = memo(function IpadPlayer({ activeItem, activeSection, source,
 export default function App() {
   const [auth, setAuth]                       = useState(null);
   const [nrkSections, setNrkSections]         = useState(loadEpisoder);
-  const [nrkCovers, setNrkCovers]             = useState({});
+  const [nrkCovers, setNrkCovers]             = useState(loadCovers);
+  const [online, setOnline]                   = useState(() => typeof navigator === "undefined" ? true : navigator.onLine);
+  const [lagret, setLagret]                   = useState(lagredeIder);
   const [spotifyCovers, setSpotifyCovers]     = useState({});
   const [source, setSource]                   = useState(null);
   const [activeItem, setActiveItem]           = useState(null);
@@ -859,6 +887,24 @@ export default function App() {
     return () => window.removeEventListener("resize", handler);
   }, []);
 
+  // Nett av/på
+  useEffect(() => {
+    const på = () => setOnline(true), av = () => setOnline(false);
+    window.addEventListener("online", på); window.addEventListener("offline", av);
+    return () => { window.removeEventListener("online", på); window.removeEventListener("offline", av); };
+  }, []);
+
+  // Offline-synk: last ned nye episoder, slett fjernede
+  useEffect(() => {
+    if (!online) return;
+    synk(nrkSections, (item) => fetchNrkManifest(item.id, item.programType), () => setLagret(lagredeIder()));
+  }, [nrkSections, online]);
+
+  // Husk coverbilde-URL-er så de kan vises uten nett
+  useEffect(() => {
+    try { localStorage.setItem(LS_COVERS, JSON.stringify(nrkCovers)); } catch {}
+  }, [nrkCovers]);
+
   // Hent oppdatert episodeliste ved oppstart. Faller stille tilbake til lagret/standard liste.
   useEffect(() => {
     fetch("/api/episodes", { cache: "no-store" })
@@ -904,7 +950,7 @@ export default function App() {
           }
         } else {
           // API: psapi via Vercel proxy (Karsten og Petra)
-          await Promise.all(section.items.map(async (item) => {
+          await Promise.all(section.items.filter(item => !nrkCovers[item.id]).map(async (item) => {
             const url = await fetchNrkCover(item.id, item.programType);
             if (url) map[item.id] = url;
           }));
@@ -1030,11 +1076,17 @@ export default function App() {
         url = await fetchRssAudioUrl(rssUrl, item.title);
       } else {
         // API: bruk psapi via Vercel proxy (Karsten og Petra m.fl.)
-        url = await fetchNrkManifest(item.id, item.programType);
+        url = await lokalUrl(item.id) || await fetchNrkManifest(item.id, item.programType);
       }
 
-      if (requestId !== requestIdRef.current) return;
-      setNrkUrl(url);
+      if (requestId !== requestIdRef.current) {
+        if (url?.startsWith("blob:")) URL.revokeObjectURL(url);
+        return;
+      }
+      setNrkUrl(prev => {
+        if (prev?.startsWith("blob:")) URL.revokeObjectURL(prev);
+        return url;
+      });
     } catch (e) {
       console.error("velgNrk feil:", item.title, e.message);
     } finally {
@@ -1123,7 +1175,7 @@ export default function App() {
 
   function getFlattened() {
     const all = [];
-    nrkSections.forEach(s => s.items.forEach(item => all.push({ item, section: s, type: "nrk" })));
+    tilgjengeligeSections.forEach(s => s.items.forEach(item => all.push({ item, section: s, type: "nrk" })));
     SPOTIFY_SECTION.items.forEach(item => all.push({ item, section: SPOTIFY_SECTION, type: "spotify" }));
     return all;
   }
@@ -1148,11 +1200,18 @@ export default function App() {
   const velgSpotifyCb = useCallback(velgSpotify, [auth, spotifyCovers, source, activeItem, isWide]);
 
   // ── Mini-modus: filtrer seksjoner til kun valgte items ──────────
-  const visibleNrkSections = mode === "mini"
+  // Uten nett: vis bare episoder som er lagret på telefonen
+  const tilgjengeligeSections = online
     ? nrkSections
+    : nrkSections
+        .map(s => ({ ...s, items: s.items.filter(i => lagret.has(i.id)) }))
+        .filter(s => s.items.length > 0);
+
+  const visibleNrkSections = mode === "mini"
+    ? tilgjengeligeSections
         .map(s => ({ ...s, items: s.items.filter(i => miniIds.includes(i.id)) }))
         .filter(s => s.items.length > 0)
-    : nrkSections;
+    : tilgjengeligeSections;
 
   const visibleSpotifySection = mode === "mini"
     ? { ...SPOTIFY_SECTION, items: SPOTIFY_SECTION.items.filter(i => miniIds.includes(i.id)) }
@@ -1192,6 +1251,7 @@ export default function App() {
       {showParentPanel && (
         <ParentPanel
           nrkSections={nrkSections}
+          offline={{ ...offlineStatus(nrkSections), online, antall: nrkSections.reduce((n, s) => n + s.items.length, 0) }}
           mode={mode} setMode={setMode}
           miniIds={miniIds} setMiniIds={setMiniIds}
           spotifyEnabled={spotifyEnabled} setSpotifyEnabled={setSpotifyEnabled}
