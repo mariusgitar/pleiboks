@@ -27,7 +27,7 @@ const RSS = {
 // episoder-standard.json er reserve: brukes før første henting og hvis nettet er nede.
 const LS_EPISODER = "pb_episoder";
 
-const LS_COVERS = "pb_covers";
+const LS_COVERS = "pb_covers_v2"; // v2: høyere oppløsning (v1 kunne inneholde små bilder)
 function loadCovers() {
   try { return JSON.parse(localStorage.getItem(LS_COVERS)) || {}; } catch { return {}; }
 }
@@ -141,7 +141,11 @@ async function fetchNrkCover(id, programType) {
     const images = data?.preplay?.poster?.images || data?.preplay?.images || data?.images || data?.image;
     if (!images) return null;
     const arr = Array.isArray(images) ? images : [images];
-    return arr.filter((i) => i?.url).sort((a, b) => (b.width || 0) - (a.width || 0))[0]?.url || null;
+    // NRK oppgir bredde som pixelWidth (av og til width). Velg største; uten størrelser: siste (NRK lister minst → størst).
+    const bredde = (i) => i.pixelWidth || i.width || 0;
+    const med = arr.filter((i) => i?.url);
+    if (!med.some(bredde)) return med[med.length - 1]?.url || null;
+    return med.sort((a, b) => bredde(b) - bredde(a))[0]?.url || null;
   } catch { return null; }
 }
 
