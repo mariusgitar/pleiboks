@@ -1,0 +1,273 @@
+<!DOCTYPE html>
+<html lang="no">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <meta name="robots" content="noindex">
+  <title>Mini+ prototype</title>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Nunito:wght@700;800;900&display=swap">
+  <style>
+    * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+    html, body { margin: 0; font-family: 'Nunito', system-ui, sans-serif; color: #1a1a1a; }
+    body { min-height: 100vh; background: linear-gradient(180deg,#AEE4FF 0%,#C8F0FF 45%,#DAFFC8 100%) fixed; overscroll-behavior-y: none; }
+    button { font-family: inherit; }
+
+    /* ── Sticky seriefaner ── */
+    .tabs { position: sticky; top: 0; z-index: 10; padding: calc(12px + env(safe-area-inset-top)) 12px 12px;
+            background: linear-gradient(180deg, rgba(174,228,255,.97) 70%, rgba(174,228,255,0)); }
+    .tabrow { display: flex; justify-content: center; gap: 10px; }
+    .tab { position: relative; flex: 0 1 76px; aspect-ratio: 1; border: none; padding: 0; border-radius: 22px; cursor: pointer;
+           background: #fff; overflow: hidden; box-shadow: 0 3px 10px rgba(0,0,0,.12);
+           transform: scale(.86) rotate(var(--tilt)); opacity: .72; filter: saturate(.75);
+           transition: transform .28s cubic-bezier(.34,1.5,.64,1), opacity .2s, filter .2s, box-shadow .2s; }
+    .tab.on { transform: scale(1.06) rotate(0deg); opacity: 1; filter: none; box-shadow: 0 6px 18px var(--accent-shadow); outline: 4px solid var(--accent); outline-offset: -1px; }
+    .tab img { width: 100%; height: 100%; object-fit: cover; display: block; }
+    .tab .ikon { width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; font-size: 38px; background: var(--color); }
+    .tab .dot { position: absolute; bottom: 6px; left: 50%; transform: translateX(-50%); width: 10px; height: 10px; border-radius: 50%; background: var(--accent); border: 2px solid #fff; display: none; }
+    .tab.spiller .dot { display: block; animation: puls 1s ease-in-out infinite alternate; }
+    @keyframes puls { from { transform: translateX(-50%) scale(.8); } to { transform: translateX(-50%) scale(1.25); } }
+
+    /* ── Kort ── */
+    main { padding: 4px 18px 120px; max-width: 520px; margin: 0 auto; }
+    .serietittel { display: flex; align-items: center; gap: 10px; margin: 2px 4px 14px; font-weight: 900; font-size: 20px; }
+    .serietittel .ik { width: 38px; height: 38px; border-radius: 12px; display: flex; align-items: center; justify-content: center; font-size: 20px; }
+    .kort { display: block; width: 100%; text-align: left; background: #fff; border: none; border-radius: 24px; overflow: hidden; padding: 0;
+            margin-bottom: 18px; cursor: pointer; box-shadow: 0 3px 14px rgba(0,0,0,.10); outline: 3px solid transparent;
+            transform: rotate(var(--tilt)); transition: all .22s cubic-bezier(.34,1.4,.64,1); }
+    .kort.on { transform: rotate(0) scale(1.015); outline-color: var(--accent); box-shadow: 0 8px 28px var(--accent-shadow); }
+    .kort.on.spiller { animation: pust 2.6s ease-in-out infinite; }
+    @keyframes pust { 0%,100% { transform: scale(1.015); } 50% { transform: scale(1.04); } }
+    .bilde { width: 100%; aspect-ratio: 4/3; display: flex; align-items: center; justify-content: center; position: relative; background: var(--color); }
+    .bilde img { width: 100%; height: 100%; object-fit: contain; }
+    .bilde .em { font-size: 84px; }
+    .eq { position: absolute; top: 14px; right: 14px; background: var(--accent); border-radius: 24px; padding: 9px 14px; display: none; gap: 5px; align-items: flex-end; height: 32px; }
+    .kort.on.spiller .eq { display: flex; }
+    .eq i { width: 4px; border-radius: 2px; background: #fff; animation: eqbar .7s ease-in-out infinite alternate; }
+    .eq i:nth-child(2) { animation-delay: .18s; } .eq i:nth-child(3) { animation-delay: .1s; }
+    @keyframes eqbar { from { height: 3px; } to { height: 14px; } }
+    .bunn { padding: 16px 20px 20px; display: flex; align-items: center; gap: 16px; }
+    .bunn .t { flex: 1; font-size: 20px; font-weight: 900; line-height: 1.25; }
+    .knapp { width: 56px; height: 56px; border-radius: 50%; flex-shrink: 0; display: flex; align-items: center; justify-content: center; background: var(--accent-soft); }
+    .kort.on .knapp { background: var(--accent); }
+    .knapp svg { width: 22px; height: 22px; fill: var(--accent); }
+    .kort.on .knapp svg { fill: #fff; }
+    .laster .knapp svg { opacity: .3; }
+
+    /* ── Sol + foreldrevalg ── */
+    .sol { position: fixed; left: 10px; bottom: calc(14px + env(safe-area-inset-bottom)); font-size: 34px; z-index: 20; padding: 8px; animation: spin 22s linear infinite; opacity: .85; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .panel { position: fixed; inset: 0; z-index: 50; background: #FAF7F4; overflow-y: auto; padding: 20px; display: none; }
+    .panel.vis { display: block; }
+    .panel h2 { margin: 0 0 4px; font-size: 20px; } .panel .sub { color: #888; font-size: 13px; margin-bottom: 16px; }
+    .velg { display: flex; align-items: center; gap: 12px; padding: 12px; background: #fff; border-radius: 14px; margin-bottom: 8px; border: 2px solid #eee; font-weight: 800; }
+    .velg.on { border-color: #1B4D5C; }
+    .velg input { width: 22px; height: 22px; }
+    .velg .ik { width: 34px; height: 34px; border-radius: 10px; display: flex; align-items: center; justify-content: center; }
+    .velg .n { font-size: 12px; color: #888; font-weight: 700; margin-left: auto; }
+    .seg { display: flex; gap: 8px; margin: 8px 0 20px; }
+    .seg button { flex: 1; padding: 12px; border-radius: 12px; border: 2px solid #eee; background: #fff; font-weight: 800; font-size: 14px; }
+    .seg button.on { background: #1B4D5C; color: #fff; border-color: #1B4D5C; }
+    .lukk { width: 100%; padding: 16px; border-radius: 14px; border: none; background: #1B4D5C; color: #fff; font-size: 16px; font-weight: 900; margin-top: 12px; }
+    .tom { text-align: center; padding: 60px 20px; font-weight: 800; color: #1B4D5C; }
+  </style>
+</head>
+<body>
+  <div class="tabs"><div class="tabrow" id="tabs"></div></div>
+  <main id="main"><div class="tom">Laster …</div></main>
+  <div class="sol" id="sol">☀️</div>
+
+  <div class="panel" id="panel">
+    <h2>Mini+ (prototype)</h2>
+    <div class="sub">Velg 3–5 serier. Rekkefølgen her blir rekkefølgen på fanene.</div>
+    <div style="font-weight:900;font-size:14px">Fanene viser</div>
+    <div class="seg" id="stil">
+      <button data-v="cover">Coverbilde</button>
+      <button data-v="ikon">Ikon</button>
+    </div>
+    <div id="velgListe"></div>
+    <button class="lukk" id="lukk">Ferdig</button>
+  </div>
+
+  <audio id="lyd" preload="none"></audio>
+
+<script>
+// ── Prototype for «Mini+»: store kort, men gruppert i 3–5 serier med sticky faner. ──
+// Bruker ekte data: /api/episodes, lagrede coverbilder (pb_covers) og offline-lyd (pleiboks-lyd-v1).
+const $ = id => document.getElementById(id);
+// Kjøres siden utenfor pleiboks.vercel.app (f.eks. åpnet som fil), hentes data derfra.
+const API = /pleiboks|localhost/.test(location.hostname) ? "" : "https://pleiboks.vercel.app";
+// Reserve hvis episodelisten ikke kan hentes (siste standardliste fra appen)
+const STANDARD = [{"id": "hallo-bablo", "label": "Hallo Bablo", "icon": "📚", "accent": "#1B6B8A", "color": "#E3F2F9", "items": [{"id": "l_b9a1151b-f64b-4658-a115-1bf64ba658f9", "title": "Oversvømmelse", "emoji": "🌊"}, {"id": "l_fbd86653-d114-44a4-9866-53d11464a4ae", "title": "Ja-dag", "emoji": "✅"}, {"id": "l_8172372d-510a-49d6-b237-2d510af9d6ac", "title": "Superlimet", "emoji": "🔧"}, {"id": "l_e6b980ce-8601-476a-b980-ce8601176a46", "title": "Lottes banneshow", "emoji": "🤐"}, {"id": "l_9a5246e8-8e2b-4966-9246-e88e2b1966ca", "title": "Fiskoteket", "emoji": "🐟"}, {"id": "l_135ec467-a256-4053-9ec4-67a25660539d", "title": "Dinosaurmysteriet", "emoji": "🦕"}, {"id": "l_e61edd4f-9d75-430e-9edd-4f9d75e30e50", "title": "Det snør inne", "emoji": "❄️"}, {"id": "l_af64b356-d05c-4cd6-a4b3-56d05cacd6b7", "title": "Hva er inni det store egget?", "emoji": "🥚"}, {"id": "l_02e63def-dabd-4f1e-a63d-efdabd5f1e26", "title": "Lotte leker død", "emoji": "💀"}, {"id": "l_01e1ebbe-fe80-4e98-a1eb-befe804e98ba", "title": "Bremsespor-mysteriet", "emoji": "🚗"}, {"id": "l_6e7a2e2c-44f3-4660-ba2e-2c44f366607f", "title": "Fantasibygging", "emoji": "🏗️"}]}, {"id": "kokosbananas", "label": "Kokosbananas", "icon": "🥥", "accent": "#B85A00", "color": "#FFF0DC", "items": [{"id": "l_810de249-e5d3-4a12-8de2-49e5d33a12d2", "title": "Superdupersykkelen", "emoji": "🚲"}, {"id": "l_cb5acb0d-1284-47d0-9acb-0d128447d0c2", "title": "Melonhvalen", "emoji": "🍉🐋"}, {"id": "l_c1919e6d-7311-4cae-919e-6d7311dcae09", "title": "Bråkebyrået", "emoji": "🔊"}]}, {"id": "fantorangen", "label": "Fantorangen", "icon": "🧡", "accent": "#D4700A", "color": "#FFF3DC", "items": [{"id": "l_8e42fb20-bb6f-404c-82fb-20bb6f004c5f", "title": "Kjempe-Fantus", "emoji": "🌳"}, {"id": "l_01779e9e-49ad-41ff-b79e-9e49ad11ffc0", "title": "Fantus forsvinn", "emoji": "📺"}, {"id": "l_9124669c-0fc4-4660-a466-9c0fc4b6609a", "title": "Tryllerydding", "emoji": "🪄"}]}, {"id": "fantorangenfortellinger", "label": "Fantorangenfortellinger", "icon": "🎭", "accent": "#B85A00", "color": "#FFF3DC", "items": [{"id": "l_17d00a92-711b-4bdc-900a-92711b2bdce1", "title": "Gøy natt", "emoji": "🌙"}, {"id": "l_f17536cc-f908-4c2d-b536-ccf908ec2df1", "title": "Bursdagen", "emoji": "🎂"}, {"id": "l_55d4584b-3c22-48a6-9458-4b3c2278a6f4", "title": "Superdropsa", "emoji": "🍬"}, {"id": "l_1d43056a-1d70-40e3-8305-6a1d7090e32d", "title": "Fantorangen sit fast i do", "emoji": "🚽"}]}, {"id": "karsten-petra", "label": "Karsten og Petra", "icon": "👫", "accent": "#2D6B4A", "color": "#E8F5EE", "items": [{"id": "MKTT05000605", "title": "Bestevenner", "emoji": "🤝", "programType": "program"}, {"id": "MKTT05000505", "title": "Petra begynner i barnehagen", "emoji": "🏫", "programType": "program"}, {"id": "MKTT04000104", "title": "Karsten kjører brannbil", "emoji": "🚒", "programType": "program"}]}, {"id": "blime", "label": "BlimE!", "icon": "🌈", "accent": "#4f46e5", "color": "#EDE8FF", "items": [{"id": "l_bd313b9d-5f6b-44a1-b13b-9d5f6b84a16b", "title": "Kom igjen 'a", "emoji": "🎤"}, {"id": "l_2ae9578e-b9ef-4451-a957-8eb9ef0451f2", "title": "Halloween", "emoji": "🎃"}, {"id": "l_184d0d69-e4ba-4316-8d0d-69e4bad3165a", "title": "Kua mi", "emoji": "🐄"}, {"id": "l_227c72ee-f0d8-477e-bc72-eef0d8877e3e", "title": "Ferdig snakka", "emoji": "🤫"}, {"id": "l_ee431198-066e-4814-8311-98066e98148b", "title": "Være med", "emoji": "🙌"}, {"id": "l_ff643c27-b82e-44bd-a43c-27b82e34bd5f", "title": "Sveve høyt", "emoji": "🪁"}, {"id": "l_2a2d7975-67b3-48e2-ad79-7567b3c8e2ba", "title": "Dynamitt", "emoji": "💥"}, {"id": "l_d8d2e266-5ed9-41e0-92e2-665ed9b1e074", "title": "Ser deg", "emoji": "👀"}]}, {"id": "fantus-musikantus", "label": "Fantus musikantus", "icon": "🎹", "accent": "#D4700A", "color": "#FFF3DC", "items": [{"id": "l_25663b06-aad8-4b84-a63b-06aad84b841a", "title": "Hjulene på bussen", "emoji": "🚌"}, {"id": "l_704cb2d9-785e-4907-8cb2-d9785e490790", "title": "Ma me mo", "emoji": "🎵"}, {"id": "l_7514e801-f102-40bf-94e8-01f10200bffb", "title": "Eggesangen", "emoji": "🥚"}, {"id": "l_d121604d-3d7f-4c8c-a160-4d3d7f9c8cc9", "title": "Fader Jakob", "emoji": "🔔"}, {"id": "l_a0ef8d4a-c61d-4009-af8d-4ac61d3009ad", "title": "Klappesangen", "emoji": "👏"}]}, {"id": "musikk-fantorangens-verden", "label": "Fantorangens verden", "icon": "🎶", "accent": "#D4700A", "color": "#FFF3DC", "items": [{"id": "l_b34a81e1-a911-4824-8a81-e1a9118824e2", "title": "Snibel Snabel", "emoji": "🐘"}, {"id": "l_d2c4eeae-55c8-4cfc-84ee-ae55c80cfc0d", "title": "Tannpussesangen", "emoji": "🪥"}, {"id": "l_08f018af-0656-48dd-b018-af065638ddd4", "title": "Sjøbanan", "emoji": "🍌"}, {"id": "l_6c29c28c-69a1-43ef-a9c2-8c69a1b3efab", "title": "Ryddesang", "emoji": "🧹"}, {"id": "l_5e1b5f7f-abe9-4c8a-9b5f-7fabe9bc8a9f", "title": "Tallsangen", "emoji": "🔢"}, {"id": "l_7733df85-6d87-4e44-b3df-856d876e44cb", "title": "Bæsjesangen", "emoji": "💩"}]}, {"id": "brannbamsen-bjornis", "label": "Brannbamsen Bjørnis", "icon": "🧸", "accent": "#C0392B", "color": "#FDECEA", "items": [{"id": "l_a860e8cf-d13d-4bd3-a0e8-cfd13d4bd3b1", "title": "Fingeren sitter fast", "emoji": "🤞"}]}];
+const LS = { serier: "pb_miniplus_serier", stil: "pb_miniplus_stil" };
+const PLAY = '<svg viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>';
+const PAUSE = '<svg viewBox="0 0 24 24"><path d="M6 5h4v14H6zM14 5h4v14h-4z"/></svg>';
+
+let sections = [], covers = {}, valgte = [], stil = "cover", aktivSerie = null;
+let spiller = { id: null, playing: false, laster: false, blob: null };
+
+function tilt(id, r) { let h = 0; for (const c of id) h = (h * 31 + c.charCodeAt(0)) | 0; return (((Math.abs(h) % 1000) / 1000) - .5) * 2 * r; }
+function esc(s) { return String(s ?? "").replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c])); }
+function farger(s) { return `--accent:${s.accent};--accent-shadow:${s.accent}55;--accent-soft:${s.accent}1A;--color:${s.color};`; }
+
+async function last() {
+  try { covers = JSON.parse(localStorage.getItem("pb_covers")) || {}; } catch {}
+  try {
+    const d = await (await fetch(API + "/api/episodes", { cache: "no-store" })).json();
+    sections = d.sections || [];
+  } catch {
+    try { sections = JSON.parse(localStorage.getItem("pb_episoder")).sections; } catch {}
+  }
+  if (!sections?.length) sections = STANDARD;
+  stil = localStorage.getItem(LS.stil) || "cover";
+  try { valgte = JSON.parse(localStorage.getItem(LS.serier)) || []; } catch {}
+  valgte = valgte.filter(id => sections.some(s => s.id === id));
+  if (!valgte.length) valgte = sections.slice(0, 4).map(s => s.id);
+  aktivSerie = valgte[0];
+  tegn();
+  hentManglendeCovers();
+}
+
+async function hentManglendeCovers() {
+  const mangler = sections.filter(s => valgte.includes(s.id)).flatMap(s => s.items).filter(i => !covers[i.id]);
+  await Promise.all(mangler.map(async i => {
+    try {
+      const d = await (await fetch(`${API}/api/metadata?id=${i.id}&type=${i.programType === "program" ? "program" : "podcast"}`)).json();
+      const imgs = d?.preplay?.poster?.images || d?.preplay?.images || d?.images;
+      const arr = (Array.isArray(imgs) ? imgs : imgs ? [imgs] : []).filter(x => x?.url);
+      const url = arr.sort((a, b) => (b.width || 0) - (a.width || 0))[0]?.url;
+      if (url) covers[i.id] = url;
+    } catch {}
+  }));
+  if (mangler.length) tegn();
+}
+
+// ── Tegning ──
+function tegn() {
+  const serier = valgte.map(id => sections.find(s => s.id === id)).filter(Boolean);
+  $("tabs").innerHTML = serier.map(s => {
+    const forsteCover = s.items.map(i => covers[i.id]).find(Boolean);
+    const innhold = stil === "cover" && forsteCover ? `<img src="${esc(forsteCover)}" alt="" onerror="this.outerHTML='<div class=&quot;ikon&quot;>${esc(s.icon || "🎧")}</div>'">` : `<div class="ikon">${esc(s.icon || "🎧")}</div>`;
+    const spillerHer = spiller.playing && s.items.some(i => i.id === spiller.id);
+    return `<button class="tab ${s.id === aktivSerie ? "on" : ""} ${spillerHer ? "spiller" : ""}" data-serie="${esc(s.id)}" style="${farger(s)}--tilt:${tilt(s.id, 3)}deg">${innhold}<span class="dot"></span></button>`;
+  }).join("");
+
+  const s = sections.find(x => x.id === aktivSerie);
+  if (!s) { $("main").innerHTML = '<div class="tom">Trykk 5 ganger på sola for å velge serier</div>'; return; }
+  $("main").innerHTML = `
+    <div class="serietittel"><span class="ik" style="background:${s.accent}">${esc(s.icon || "")}</span>${esc(s.label)}</div>
+    ${s.items.map(i => {
+      const on = spiller.id === i.id;
+      return `<button class="kort ${on ? "on" : ""} ${on && spiller.playing ? "spiller" : ""} ${on && spiller.laster ? "laster" : ""}" data-id="${esc(i.id)}" style="${farger(s)}--tilt:${tilt(i.id, 2.4)}deg">
+        <div class="bilde">${covers[i.id] ? `<img src="${esc(covers[i.id])}" alt="" onerror="this.replaceWith(Object.assign(document.createElement('span'),{className:'em',textContent:'${esc(i.emoji)}'}))">` : `<span class="em">${esc(i.emoji)}</span>`}
+          <div class="eq"><i></i><i></i><i></i></div></div>
+        <div class="bunn"><div class="t">${esc(i.emoji)} ${esc(i.title)}</div><div class="knapp">${on && spiller.playing ? PAUSE : PLAY}</div></div>
+      </button>`;
+    }).join("")}`;
+}
+
+function byttSerie(id) {
+  if (id === aktivSerie) return;
+  aktivSerie = id;
+  tegn();
+  window.scrollTo(0, 0);
+}
+
+$("tabs").addEventListener("click", e => { const b = e.target.closest(".tab"); if (b) byttSerie(b.dataset.serie); });
+
+// Sveip venstre/høyre på kortene for å bytte serie
+let sx = null, sy = null;
+$("main").addEventListener("touchstart", e => { sx = e.touches[0].clientX; sy = e.touches[0].clientY; }, { passive: true });
+$("main").addEventListener("touchend", e => {
+  if (sx === null) return;
+  const dx = e.changedTouches[0].clientX - sx, dy = e.changedTouches[0].clientY - sy; sx = null;
+  if (Math.abs(dx) < 70 || Math.abs(dx) < Math.abs(dy) * 1.5) return;
+  const i = valgte.indexOf(aktivSerie), j = i + (dx < 0 ? 1 : -1);
+  if (j >= 0 && j < valgte.length) byttSerie(valgte[j]);
+});
+
+// ── Avspilling ──
+// Oppdaterer bare klasser/ikoner (ikke hele lista) så bildene ikke blinker
+function oppdaterSpiller() {
+  document.querySelectorAll(".kort").forEach(k => {
+    const on = k.dataset.id === spiller.id;
+    k.classList.toggle("on", on);
+    k.classList.toggle("spiller", on && spiller.playing);
+    k.classList.toggle("laster", on && spiller.laster);
+    k.querySelector(".knapp").innerHTML = on && spiller.playing ? PAUSE : PLAY;
+  });
+  document.querySelectorAll(".tab").forEach(t => {
+    const s = sections.find(x => x.id === t.dataset.serie);
+    t.classList.toggle("spiller", spiller.playing && !!s?.items.some(i => i.id === spiller.id));
+  });
+}
+const lyd = $("lyd");
+lyd.addEventListener("play", () => { spiller.playing = true; oppdaterSpiller(); });
+lyd.addEventListener("pause", () => { spiller.playing = false; oppdaterSpiller(); });
+lyd.addEventListener("ended", () => { spiller.playing = false; oppdaterSpiller(); });
+
+async function lydUrl(item) {
+  try {
+    const c = await caches.open("pleiboks-lyd-v1");
+    const r = await c.match(`/offline-lyd/${item.id}`);
+    if (r) return URL.createObjectURL(await r.blob());
+  } catch {}
+  const d = await (await fetch(`${API}/api/manifest?id=${item.id}&type=${item.programType === "program" ? "program" : "podcast"}`)).json();
+  const a = d?.playable?.assets || [];
+  return (a.find(x => x.format === "MP3") || a[0])?.url;
+}
+
+$("main").addEventListener("click", async e => {
+  const k = e.target.closest(".kort"); if (!k) return;
+  const id = k.dataset.id;
+  if (spiller.id === id) { lyd.paused ? lyd.play() : lyd.pause(); return; }
+  const item = sections.flatMap(s => s.items).find(i => i.id === id);
+  lyd.pause();
+  if (spiller.blob) URL.revokeObjectURL(spiller.blob);
+  spiller = { id, playing: false, laster: true, blob: null };
+  oppdaterSpiller();
+  try {
+    const url = await lydUrl(item);
+    if (spiller.id !== id) return;
+    if (url?.startsWith("blob:")) spiller.blob = url;
+    lyd.src = url;
+    spiller.laster = false;
+    await lyd.play();
+  } catch (err) { spiller.laster = false; oppdaterSpiller(); console.warn(err); }
+});
+
+// ── Foreldrevalg: trykk 5 ganger på sola ──
+let trykk = 0, timer;
+$("sol").onclick = () => {
+  trykk++; clearTimeout(timer); timer = setTimeout(() => trykk = 0, 1500);
+  if (trykk >= 5) { trykk = 0; visPanel(); }
+};
+function visPanel() {
+  $("panel").classList.add("vis");
+  [...$("stil").children].forEach(b => b.classList.toggle("on", b.dataset.v === stil));
+  // Valgte først (i rekkefølge), så resten
+  const sortert = [...valgte.map(id => sections.find(s => s.id === id)).filter(Boolean), ...sections.filter(s => !valgte.includes(s.id))];
+  $("velgListe").innerHTML = sortert.map(s => `
+    <label class="velg ${valgte.includes(s.id) ? "on" : ""}">
+      <input type="checkbox" data-id="${esc(s.id)}" ${valgte.includes(s.id) ? "checked" : ""}>
+      <span class="ik" style="background:${s.accent}">${esc(s.icon || "")}</span>${esc(s.label)}
+      <span class="n">${valgte.includes(s.id) ? "#" + (valgte.indexOf(s.id) + 1) + " · " : ""}${s.items.length} ep.</span>
+    </label>`).join("");
+}
+$("stil").onclick = e => { const b = e.target.closest("button"); if (!b) return; stil = b.dataset.v; localStorage.setItem(LS.stil, stil); visPanel(); };
+$("velgListe").onchange = e => {
+  const id = e.target.dataset.id;
+  if (e.target.checked) { if (valgte.length >= 5) { e.target.checked = false; alert("Maks 5 serier"); return; } valgte.push(id); }
+  else valgte = valgte.filter(x => x !== id);
+  localStorage.setItem(LS.serier, JSON.stringify(valgte));
+  visPanel();
+};
+$("lukk").onclick = () => {
+  $("panel").classList.remove("vis");
+  if (!valgte.includes(aktivSerie)) aktivSerie = valgte[0];
+  tegn(); hentManglendeCovers();
+};
+
+last();
+</script>
+</body>
+</html>
