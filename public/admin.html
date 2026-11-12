@@ -185,7 +185,9 @@ function finnTittel(d) {
 function finnBilde(d) {
   const imgs = d?.preplay?.poster?.images || d?.preplay?.images || d?.images;
   const arr = Array.isArray(imgs) ? imgs : imgs ? [imgs] : [];
-  return arr.filter(i => i?.url).sort((a, b) => (a.width || 0) - (b.width || 0)).find(i => (i.width || 0) >= 200)?.url || arr[0]?.url || "";
+  const b = i => i.pixelWidth || i.width || 0;
+  const med = arr.filter(i => i?.url).sort((x, y) => b(x) - b(y));
+  return med.find(i => b(i) >= 200)?.url || med[med.length - 1]?.url || "";
 }
 function finnesFraFor(id) {
   for (const s of sections) if (s.items.some(i => i.id === id)) return s.label;
