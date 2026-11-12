@@ -587,7 +587,7 @@ function FullPlayer({ item, section, source, playing, loading, progress, duratio
         <CoverImg item={item} sectionColor={section.color} size={236} width={300} radius={28} playing={playing} onClick={onClose} mini={false} />
       </div>
       <div style={{ position:"relative", zIndex:1, width:"100%", textAlign:"left", marginBottom:"auto" }}>
-        <div style={{ color:"#fff", fontSize:"1.5rem", fontWeight:900, lineHeight:1.2, marginBottom:4 }}>{item.title}</div>
+        <div style={{ color:"#fff", fontSize:"1.5rem", fontWeight:900, lineHeight:1.2, marginBottom:4 }}>{item.emoji && <span style={{ marginRight:8 }}>{item.emoji}</span>}{item.title}</div>
         <div style={{ color:"rgba(255,255,255,0.5)", fontSize:"0.85rem", fontWeight:700 }}>{item.artist || section.label}</div>
       </div>
       {source !== "spotify" && (
@@ -903,7 +903,7 @@ const IpadPlayer = memo(function IpadPlayer({ activeItem, activeSection, source,
             <CoverImg item={activeItem} sectionColor={activeSection.color} size={220} width={280} radius={24} playing={playing} onClick={undefined} mini={false} />
           </div>
           <div style={{ width:"100%", textAlign:"center" }}>
-            <div style={{ color:"#fff", fontSize:"1.45rem", fontWeight:900, lineHeight:1.2, marginBottom:6 }}>{activeItem.title}</div>
+            <div style={{ color:"#fff", fontSize:"1.45rem", fontWeight:900, lineHeight:1.2, marginBottom:6 }}>{activeItem.emoji && <span style={{ marginRight:8 }}>{activeItem.emoji}</span>}{activeItem.title}</div>
             <div style={{ color:"rgba(255,255,255,0.58)", fontSize:"0.9rem", fontWeight:700 }}>{activeItem.artist || activeSection.label}</div>
           </div>
         </div>
