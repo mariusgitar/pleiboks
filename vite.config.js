@@ -38,7 +38,19 @@ export default defineConfig({
       },
       workbox: {
         globPatterns: ["**/*.{js,css,html,ico,png,svg,webp}"],
-        navigateFallbackDenylist: [/^\/api\//]
+        navigateFallbackDenylist: [/^\/api\//],
+        // Coverbilder fra NRK caches så de vises uten nett
+        runtimeCaching: [
+          {
+            urlPattern: ({ request, sameOrigin }) => request.destination === "image" && !sameOrigin,
+            handler: "CacheFirst",
+            options: {
+              cacheName: "pleiboks-covers",
+              expiration: { maxEntries: 400, maxAgeSeconds: 60 * 60 * 24 * 180 },
+              cacheableResponse: { statuses: [0, 200] }
+            }
+          }
+        ]
       }
     })
   ]
