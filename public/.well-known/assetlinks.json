@@ -1,0 +1,8 @@
+[{
+      "relation": ["delegate_permission/common.handle_all_urls"],
+      "target": {
+        "namespace": "android_app",
+        "package_name": "app.vercel.pleiboks.twa",
+        "sha256_cert_fingerprints": ["8C:7B:DF:D8:EA:6C:3E:3F:FE:5F:9B:1E:00:C7:C8:FE:3D:95:A5:B8:D8:7B:44:5A:13:3B:C2:00:79:AC:FB:66"]
+      }
+    }]
