@@ -13,7 +13,7 @@ export default defineConfig({
         description: "En enkel musikkspiller for barn",
         theme_color: "#AEE4FF",
         background_color: "#AEE4FF",
-        display: "standalone",
+        display: "fullscreen",
         orientation: "portrait",
         start_url: "/",
         scope: "/",
