@@ -804,6 +804,7 @@ export default function App() {
   const [nrkCovers, setNrkCovers]             = useState(loadCovers);
   const [online, setOnline]                   = useState(() => typeof navigator === "undefined" ? true : navigator.onLine);
   const [lagret, setLagret]                   = useState(lagredeIder);
+  const [laster, setLaster]                   = useState(false);
   const [spotifyCovers, setSpotifyCovers]     = useState({});
   const [source, setSource]                   = useState(null);
   const [activeItem, setActiveItem]           = useState(null);
@@ -897,7 +898,10 @@ export default function App() {
   // Offline-synk: last ned nye episoder, slett fjernede
   useEffect(() => {
     if (!online) return;
-    synk(nrkSections, (item) => fetchNrkManifest(item.id, item.programType), () => setLagret(lagredeIder()));
+    synk(nrkSections, (item) => fetchNrkManifest(item.id, item.programType), (info) => {
+      setLagret(lagredeIder());
+      if (info) setLaster(info.aktiv);
+    });
   }, [nrkSections, online]);
 
   // Husk coverbilde-URL-er så de kan vises uten nett
@@ -1233,6 +1237,22 @@ export default function App() {
         @keyframes bob        { 0%,100%{transform:translateY(0)} 50%{transform:translateY(-7px)} }
         .pb-row::-webkit-scrollbar { display:none }
       `}</style>
+
+      {/* Nedlastingsindikator: tynn linje øverst mens episoder lastes ned for offline */}
+      {laster && (() => {
+        const st = offlineStatus(nrkSections);
+        if (st.lagret >= st.totalt) return null;
+        return (
+          <div style={{ position:"fixed", top:0, left:0, right:0, zIndex:300, pointerEvents:"none" }}>
+            <div style={{ height:3, background:"rgba(255,255,255,0.35)" }}>
+              <div style={{ height:"100%", width:`${(st.lagret / st.totalt) * 100}%`, background:"#1B4D5C", transition:"width 0.4s" }} />
+            </div>
+            <div style={{ position:"absolute", top:6, right:8, fontSize:10, fontWeight:800, color:"#1B4D5C", opacity:0.55 }}>
+              ⬇ {st.lagret}/{st.totalt}
+            </div>
+          </div>
+        );
+      })()}
 
       {showOnboarding && (
         <Onboarding

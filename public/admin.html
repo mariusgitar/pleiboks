@@ -39,7 +39,16 @@
     .item input.emoji:focus, .item input.title:focus { border-color: #1B6B8A; }
     .item .tag { font-size: 10px; background: #fff3dc; color: #B85A00; border-radius: 6px; padding: 2px 6px; white-space: nowrap; }
     .iconbtn { background: transparent; padding: 6px 7px; font-size: 15px; }
-    .hidden { display: none; }
+    .hidden { display: none !important; }
+    textarea { width: 100%; padding: 11px 12px; font-size: 14px; border: 1.5px solid #d6dde0; border-radius: 10px; font-family: inherit; resize: vertical; }
+    .tabs { display: flex; gap: 6px; margin-bottom: 4px; }
+    .tab { background: #eef2f3; color: #1B2B33; padding: 7px 14px; }
+    .tab.on { background: #1B4D5C; color: #fff; }
+    .brow { display: flex; align-items: center; gap: 8px; padding: 6px 0; border-bottom: 1px solid #f0f0f0; font-size: 14px; }
+    .brow input[type=checkbox] { width: 20px; height: 20px; flex-shrink: 0; }
+    .brow .emoji { width: 52px; padding: 6px; text-align: center; font-size: 18px; }
+    .brow .title { flex: 1; padding: 6px 8px; font-size: 14px; }
+    .brow .tag { font-size: 10px; background: #fff3dc; color: #B85A00; border-radius: 6px; padding: 2px 6px; white-space: nowrap; }
     .muted { font-size: 12px; color: #6b7a80; }
   </style>
 </head>
@@ -63,13 +72,25 @@
   <div id="app" class="hidden">
     <!-- Legg til episode -->
     <div class="card">
-      <h2>➕ Legg til episode</h2>
+      <h2>➕ Legg til episoder</h2>
+      <div class="tabs">
+        <button class="tab on" id="tabEn">Én</button>
+        <button class="tab" id="tabMange">Mange</button>
+      </div>
+      <div id="enkelt">
       <label for="link">NRK-lenke eller ID</label>
       <input id="link" placeholder="https://radio.nrk.no/podkast/…/l_…  eller  MKTT05000605" autocomplete="off">
       <div class="preview hidden" id="preview"><img id="pvImg" alt=""><div><div id="pvTitle" style="font-weight:700"></div><div class="muted" id="pvType"></div></div></div>
       <div class="row2">
         <div><label for="emoji">Emoji</label><input id="emoji" maxlength="8" placeholder="🎵"></div>
         <div><label for="title">Tittel</label><input id="title"></div>
+      </div>
+      </div>
+      <div id="mange" class="hidden">
+        <label for="links">Lim inn lenker eller ID-er (én per linje, eller bare all teksten)</label>
+        <textarea id="links" rows="6" placeholder="https://radio.nrk.no/podkast/…/l_…&#10;https://radio.nrk.no/podkast/…/l_…"></textarea>
+        <div style="margin-top:10px"><button class="ghost" id="hentBtn">Hent episoder</button></div>
+        <div id="batchList"></div>
       </div>
       <label for="secSel">Seksjon</label>
       <select id="secSel"></select>
@@ -81,7 +102,7 @@
         <label for="nsColor">Farge</label>
         <select id="nsColor"></select>
       </div>
-      <div style="margin-top:14px"><button class="primary" id="addBtn" disabled>Legg til</button></div>
+      <div style="margin-top:14px"><button class="primary" id="addBtn" disabled>Legg til</button><button class="primary hidden" id="addManyBtn" disabled>Legg til</button></div>
       <div class="msg" id="addMsg"></div>
     </div>
 
@@ -202,14 +223,12 @@ function melding(t, cls = "") { $("addMsg").textContent = t; $("addMsg").classNa
 
 $("secSel").onchange = () => $("newSec").classList.toggle("hidden", $("secSel").value !== "__ny");
 
-$("addBtn").onclick = () => {
-  if (!funnet) return;
-  const title = $("title").value.trim() || funnet.title;
-  if (!title) { melding("Skriv inn en tittel.", "err"); return; }
+// Returnerer valgt seksjon, eller lager ny. null hvis noe mangler.
+function valgtSeksjon() {
   let sec;
   if ($("secSel").value === "__ny") {
     const label = $("nsLabel").value.trim();
-    if (!label) { melding("Gi den nye seksjonen et navn.", "err"); return; }
+    if (!label) { melding("Gi den nye seksjonen et navn.", "err"); return null; }
     const f = FARGER[+$("nsColor").value];
     let id = label.toLowerCase().normalize("NFKD").replace(/[̀-ͯ]/g, "").replace(/æ/g, "ae").replace(/ø/g, "o").replace(/å/g, "a").replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "seksjon";
     while (sections.some(s => s.id === id)) id += "-2";
@@ -218,6 +237,14 @@ $("addBtn").onclick = () => {
   } else {
     sec = sections.find(s => s.id === $("secSel").value);
   }
+  return sec;
+}
+
+$("addBtn").onclick = () => {
+  if (!funnet) return;
+  const title = $("title").value.trim() || funnet.title;
+  if (!title) { melding("Skriv inn en tittel.", "err"); return; }
+  const sec = valgtSeksjon(); if (!sec) return;
   const item = { id: funnet.id, title, emoji: $("emoji").value.trim() || "🎵" };
   if (funnet.programType === "program") item.programType = "program";
   sec.items.push(item);
@@ -225,6 +252,87 @@ $("addBtn").onclick = () => {
   ["link", "title", "emoji", "nsLabel", "nsIcon"].forEach(i => $(i).value = "");
   funnet = null; $("addBtn").disabled = true; $("preview").classList.add("hidden");
   melding(`✓ «${title}» lagt til i ${sec.label}. Husk å trykke Lagre.`, "ok");
+  tegn();
+  $("secSel").value = sec.id; $("newSec").classList.add("hidden");
+};
+
+// ── Mange episoder ────────────────────────────────────────
+let batch = []; // { id, programType, title, emoji, valgt, feil }
+
+function visModus(mange) {
+  $("tabEn").classList.toggle("on", !mange); $("tabMange").classList.toggle("on", mange);
+  $("enkelt").classList.toggle("hidden", mange); $("mange").classList.toggle("hidden", !mange);
+  $("addBtn").classList.toggle("hidden", mange); $("addManyBtn").classList.toggle("hidden", !mange);
+  melding("");
+}
+$("tabEn").onclick = () => visModus(false);
+$("tabMange").onclick = () => visModus(true);
+
+function tolkAlle(txt) {
+  const funn = new Map();
+  for (const m of txt.matchAll(/l_[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/gi)) funn.set(m[0].toLowerCase(), "podcast");
+  for (const m of txt.matchAll(/\b[A-Z]{4}\d{8}\b/g)) funn.set(m[0], "program");
+  return [...funn].map(([id, programType]) => ({ id, programType }));
+}
+
+$("hentBtn").onclick = async () => {
+  const funn = tolkAlle($("links").value);
+  if (!funn.length) { melding("Fant ingen NRK-ID-er i teksten.", "err"); return; }
+  const finnes = funn.filter(f => finnesFraFor(f.id));
+  batch = funn.filter(f => !finnesFraFor(f.id)).map(f => ({ ...f, title: "", emoji: "🎵", valgt: true, feil: null, laster: true }));
+  melding(`Henter ${batch.length} episoder fra NRK …` + (finnes.length ? ` (${finnes.length} finnes allerede og hoppes over)` : ""));
+  tegnBatch();
+  // Hent titler, fire om gangen
+  let i = 0;
+  async function arbeider() {
+    while (i < batch.length) {
+      const b = batch[i++];
+      try {
+        const r = await fetch(`/api/metadata?id=${b.id}&type=${b.programType}`);
+        if (!r.ok) throw new Error("NRK svarte " + r.status);
+        b.title = finnTittel(await r.json()) || "";
+        if (!b.title) b.feil = "fant ingen tittel – skriv inn selv";
+      } catch (e) { b.feil = e.message; b.valgt = false; }
+      b.laster = false;
+      tegnBatch();
+    }
+  }
+  await Promise.all([arbeider(), arbeider(), arbeider(), arbeider()]);
+  const ok = batch.filter(b => b.valgt).length;
+  melding(`${ok} av ${batch.length} klare.` + (finnes.length ? ` ${finnes.length} fantes fra før.` : ""), ok ? "ok" : "err");
+};
+
+function tegnBatch() {
+  $("batchList").innerHTML = batch.map((b, i) => `
+    <div class="brow">
+      <input type="checkbox" data-b="${i}" data-f="valgt" ${b.valgt ? "checked" : ""} ${b.laster ? "disabled" : ""}>
+      <input class="emoji" data-b="${i}" data-f="emoji" value="${esc(b.emoji)}" maxlength="8">
+      <input class="title" data-b="${i}" data-f="title" value="${esc(b.title)}" placeholder="${b.laster ? "Henter …" : esc(b.feil || "")}">
+      ${b.programType === "program" ? '<span class="tag">kun nett</span>' : ""}
+    </div>`).join("");
+  const n = batch.filter(b => b.valgt && !b.laster).length;
+  $("addManyBtn").disabled = !n || batch.some(b => b.laster);
+  $("addManyBtn").textContent = n ? `Legg til ${n} episoder` : "Legg til";
+}
+$("batchList").addEventListener("input", e => {
+  const el = e.target, b = batch[+el.dataset.b]; if (!b) return;
+  if (el.dataset.f === "valgt") { b.valgt = el.checked; tegnBatch(); }
+  else b[el.dataset.f] = el.value;
+});
+
+$("addManyBtn").onclick = () => {
+  const valgte = batch.filter(b => b.valgt);
+  if (valgte.some(b => !b.title.trim())) { melding("Noen episoder mangler tittel.", "err"); return; }
+  const sec = valgtSeksjon(); if (!sec) return;
+  for (const b of valgte) {
+    if (finnesFraFor(b.id)) continue;
+    const item = { id: b.id, title: b.title.trim(), emoji: b.emoji.trim() || "🎵" };
+    if (b.programType === "program") item.programType = "program";
+    sec.items.push(item);
+  }
+  settUlagret(true);
+  batch = []; tegnBatch(); $("links").value = ""; $("nsLabel").value = ""; $("nsIcon").value = "";
+  melding(`✓ ${valgte.length} episoder lagt til i ${sec.label}. Husk å trykke Lagre.`, "ok");
   tegn();
   $("secSel").value = sec.id; $("newSec").classList.add("hidden");
 };

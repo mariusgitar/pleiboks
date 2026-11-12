@@ -51,7 +51,8 @@ let kjorer = false;
 let igjen = null;
 
 // hentLydUrl(item) → direkte MP3-URL (bruker samme manifest-oppslag som avspilling)
-// onEndring() kalles etter hver nedlastet/slettet fil, så UI kan oppdatere status.
+// onEndring(info) kalles etter hver nedlastet/slettet fil, så UI kan oppdatere status.
+// info = { aktiv: true|false } når en nedlastingsrunde starter/slutter.
 export async function synk(sections, hentLydUrl, onEndring) {
   if (!("caches" in window)) return;
   if (kjorer) { igjen = sections; return; }
@@ -80,25 +81,31 @@ export async function synk(sections, hentLydUrl, onEndring) {
     }
 
     // Last ned det som mangler — bare uten mobildata og med nett
-    for (const [id, item] of onsket) {
-      if (meta[id]) continue;
-      if (!navigator.onLine || erMobildata()) break;
-      try {
-        const url = await hentLydUrl(item);
-        const res = await fetch(url);
-        if (!res.ok) throw new Error("HTTP " + res.status);
-        const blob = await res.blob();
-        if (blob.size < 10000) throw new Error("For liten fil");
-        await cache.put(key(id), new Response(blob, { headers: { "Content-Type": "audio/mpeg" } }));
-        meta[id] = { bytes: blob.size, dato: new Date().toISOString() };
-        skrivMeta(meta);
-        onEndring?.();
-      } catch (e) {
-        console.warn("Offline-nedlasting feilet:", item.title, e.message);
+    const mangler = [...onsket].filter(([id]) => !meta[id]);
+    if (mangler.length && navigator.onLine && !erMobildata()) {
+      onEndring?.({ aktiv: true });
+      for (const [id, item] of mangler) {
+        if (!navigator.onLine || erMobildata()) break;
+        try {
+          const url = await hentLydUrl(item);
+          const res = await fetch(url);
+          if (!res.ok) throw new Error("HTTP " + res.status);
+          // Strøm rett til cache — hele fila holdes aldri i minnet
+          let bytes = parseInt(res.headers.get("content-length")) || 0;
+          await cache.put(key(id), res);
+          if (!bytes) bytes = (await (await cache.match(key(id))).blob()).size;
+          if (bytes < 10000) { await cache.delete(key(id)); throw new Error("For liten fil"); }
+          meta[id] = { bytes, dato: new Date().toISOString() };
+          skrivMeta(meta);
+          onEndring?.();
+        } catch (e) {
+          console.warn("Offline-nedlasting feilet:", item.title, e.message);
+        }
       }
     }
   } finally {
     kjorer = false;
+    onEndring?.({ aktiv: false });
     if (igjen) { const s = igjen; igjen = null; synk(s, hentLydUrl, onEndring); }
   }
 }
