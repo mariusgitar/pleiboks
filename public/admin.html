@@ -1,0 +1,301 @@
+<!DOCTYPE html>
+<html lang="no">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="robots" content="noindex">
+  <title>Pleiboks – episoder</title>
+  <style>
+    * { box-sizing: border-box; }
+    body { font-family: system-ui, sans-serif; margin: 0; background: #FAF7F4; color: #1B2B33; }
+    header { position: sticky; top: 0; z-index: 5; background: #1B4D5C; color: #fff; padding: 14px 16px; display: flex; align-items: center; gap: 10px; }
+    header h1 { font-size: 18px; margin: 0; flex: 1; }
+    header .status { font-size: 12px; opacity: .8; }
+    main { max-width: 640px; margin: 0 auto; padding: 16px; }
+    .card { background: #fff; border-radius: 14px; padding: 16px; margin-bottom: 14px; box-shadow: 0 1px 3px rgba(0,0,0,.08); }
+    h2 { font-size: 15px; margin: 0 0 10px; }
+    label { display: block; font-size: 12px; font-weight: 700; color: #5a6b73; margin: 10px 0 4px; }
+    input, select { width: 100%; padding: 11px 12px; font-size: 16px; border: 1.5px solid #d6dde0; border-radius: 10px; background: #fff; font-family: inherit; }
+    input:focus, select:focus { outline: none; border-color: #1B6B8A; }
+    .row2 { display: grid; grid-template-columns: 80px 1fr; gap: 8px; }
+    button { font: inherit; font-weight: 700; border: none; border-radius: 10px; padding: 11px 16px; cursor: pointer; }
+    .primary { background: #1B6B8A; color: #fff; }
+    .primary:disabled { background: #b8c4c9; }
+    .save { background: #F5C842; color: #1B2B33; }
+    .save:disabled { background: rgba(255,255,255,.2); color: rgba(255,255,255,.6); }
+    .ghost { background: #eef2f3; color: #1B2B33; padding: 8px 10px; }
+    .danger { background: #fdecea; color: #C0392B; padding: 8px 10px; }
+    .preview { display: flex; gap: 12px; align-items: center; margin-top: 10px; font-size: 14px; }
+    .preview img { width: 56px; height: 56px; border-radius: 10px; object-fit: cover; background: #eee; }
+    .msg { font-size: 13px; margin-top: 8px; min-height: 1em; }
+    .err { color: #C0392B; } .ok { color: #2D6B4A; }
+    .section { border-radius: 14px; margin-bottom: 14px; overflow: hidden; background: #fff; box-shadow: 0 1px 3px rgba(0,0,0,.08); }
+    .sec-head { display: flex; align-items: center; gap: 8px; padding: 12px 12px; }
+    .sec-head .name { flex: 1; font-weight: 800; }
+    .sec-head .count { font-size: 12px; opacity: .6; }
+    .item { display: flex; align-items: center; gap: 8px; padding: 8px 12px; border-top: 1px solid #f0f0f0; font-size: 14px; }
+    .item .emoji { width: 52px; text-align: center; font-size: 20px; padding: 6px; border: 1.5px solid transparent; border-radius: 8px; }
+    .item .title { flex: 1; padding: 6px; border: 1.5px solid transparent; border-radius: 8px; font-size: 15px; }
+    .item input.emoji:focus, .item input.title:focus { border-color: #1B6B8A; }
+    .item .tag { font-size: 10px; background: #fff3dc; color: #B85A00; border-radius: 6px; padding: 2px 6px; white-space: nowrap; }
+    .iconbtn { background: transparent; padding: 6px 7px; font-size: 15px; }
+    .hidden { display: none; }
+    .muted { font-size: 12px; color: #6b7a80; }
+  </style>
+</head>
+<body>
+<header>
+  <h1>🎧 Pleiboks – episoder</h1>
+  <span class="status" id="status"></span>
+  <button class="save" id="saveBtn" disabled>Lagre</button>
+</header>
+
+<main>
+  <!-- Innlogging -->
+  <div class="card" id="loginCard">
+    <h2>Logg inn</h2>
+    <label for="pw">Admin-passord</label>
+    <input id="pw" type="password" autocomplete="current-password">
+    <div style="margin-top:12px"><button class="primary" id="loginBtn">Logg inn</button></div>
+    <div class="msg err" id="loginMsg"></div>
+  </div>
+
+  <div id="app" class="hidden">
+    <!-- Legg til episode -->
+    <div class="card">
+      <h2>➕ Legg til episode</h2>
+      <label for="link">NRK-lenke eller ID</label>
+      <input id="link" placeholder="https://radio.nrk.no/podkast/…/l_…  eller  MKTT05000605" autocomplete="off">
+      <div class="preview hidden" id="preview"><img id="pvImg" alt=""><div><div id="pvTitle" style="font-weight:700"></div><div class="muted" id="pvType"></div></div></div>
+      <div class="row2">
+        <div><label for="emoji">Emoji</label><input id="emoji" maxlength="8" placeholder="🎵"></div>
+        <div><label for="title">Tittel</label><input id="title"></div>
+      </div>
+      <label for="secSel">Seksjon</label>
+      <select id="secSel"></select>
+      <div id="newSec" class="hidden">
+        <div class="row2">
+          <div><label for="nsIcon">Ikon</label><input id="nsIcon" maxlength="8" placeholder="📚"></div>
+          <div><label for="nsLabel">Navn på ny seksjon</label><input id="nsLabel"></div>
+        </div>
+        <label for="nsColor">Farge</label>
+        <select id="nsColor"></select>
+      </div>
+      <div style="margin-top:14px"><button class="primary" id="addBtn" disabled>Legg til</button></div>
+      <div class="msg" id="addMsg"></div>
+    </div>
+
+    <p class="muted" id="info"></p>
+    <div id="list"></div>
+  </div>
+</main>
+
+<script>
+const $ = id => document.getElementById(id);
+const FARGER = [
+  { navn: "Blå",     accent: "#1B6B8A", color: "#E3F2F9" },
+  { navn: "Oransje", accent: "#D4700A", color: "#FFF3DC" },
+  { navn: "Brun",    accent: "#B85A00", color: "#FFF0DC" },
+  { navn: "Grønn",   accent: "#2D6B4A", color: "#E8F5EE" },
+  { navn: "Lilla",   accent: "#4f46e5", color: "#EDE8FF" },
+  { navn: "Rød",     accent: "#C0392B", color: "#FDECEA" },
+];
+
+let passord = sessionStorage.getItem("pb_admin_pw") || "";
+let sections = [];
+let ulagret = false;
+let funnet = null; // { id, programType, title, image }
+
+// ── Innlogging ─────────────────────────────────────────────
+async function sjekkPassord(pw) {
+  const r = await fetch("/api/episodes", { method: "POST", headers: { "Content-Type": "application/json", "x-admin-passord": pw }, body: JSON.stringify({ bareSjekk: true }) });
+  if (r.ok) return true;
+  const d = await r.json().catch(() => ({}));
+  throw new Error(d.error || "HTTP " + r.status);
+}
+async function loggInn(pw) {
+  try {
+    await sjekkPassord(pw);
+    passord = pw; sessionStorage.setItem("pb_admin_pw", pw);
+    $("loginCard").classList.add("hidden"); $("app").classList.remove("hidden");
+    await hentListe();
+  } catch (e) { $("loginMsg").textContent = e.message; }
+}
+$("loginBtn").onclick = () => loggInn($("pw").value);
+$("pw").onkeydown = e => { if (e.key === "Enter") loggInn($("pw").value); };
+if (passord) loggInn(passord);
+
+// ── Hent / lagre ───────────────────────────────────────────
+async function hentListe() {
+  const r = await fetch("/api/episodes", { cache: "no-store" });
+  const d = await r.json();
+  sections = d.sections || [];
+  $("info").textContent = d.kilde === "standard"
+    ? "Viser standardlisten fra appen. Første lagring flytter den over til den redigerbare listen."
+    : "Sist lagret: " + new Date(d.oppdatert).toLocaleString("nb-NO");
+  settUlagret(false); tegn();
+}
+function settUlagret(v) {
+  ulagret = v; $("saveBtn").disabled = !v;
+  $("status").textContent = v ? "Ulagrede endringer" : "";
+}
+$("saveBtn").onclick = async () => {
+  $("saveBtn").disabled = true; $("status").textContent = "Lagrer …";
+  const r = await fetch("/api/episodes", { method: "POST", headers: { "Content-Type": "application/json", "x-admin-passord": passord }, body: JSON.stringify({ sections }) });
+  const d = await r.json().catch(() => ({}));
+  if (!r.ok) { $("status").textContent = "Feil: " + (d.error || r.status); $("saveBtn").disabled = false; return; }
+  settUlagret(false);
+  $("status").textContent = "✓ Lagret";
+  $("info").textContent = "Sist lagret: " + new Date(d.oppdatert).toLocaleString("nb-NO") + " — appen henter listen neste gang den åpnes.";
+};
+window.addEventListener("beforeunload", e => { if (ulagret) { e.preventDefault(); e.returnValue = ""; } });
+
+// ── Legg til episode ───────────────────────────────────────
+function tolkId(txt) {
+  const p = txt.match(/l_[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i);
+  if (p) return { id: p[0].toLowerCase(), programType: "podcast" };
+  const g = txt.match(/\b[A-Z]{4}\d{8}\b/);
+  if (g) return { id: g[0], programType: "program" };
+  return null;
+}
+function finnTittel(d) {
+  return d?.preplay?.titles?.title || d?.titles?.title || d?.title || "";
+}
+function finnBilde(d) {
+  const imgs = d?.preplay?.poster?.images || d?.preplay?.images || d?.images;
+  const arr = Array.isArray(imgs) ? imgs : imgs ? [imgs] : [];
+  return arr.filter(i => i?.url).sort((a, b) => (a.width || 0) - (b.width || 0)).find(i => (i.width || 0) >= 200)?.url || arr[0]?.url || "";
+}
+function finnesFraFor(id) {
+  for (const s of sections) if (s.items.some(i => i.id === id)) return s.label;
+  return null;
+}
+
+let lenkeTimer;
+$("link").oninput = () => {
+  clearTimeout(lenkeTimer);
+  lenkeTimer = setTimeout(sjekkLenke, 300);
+};
+async function sjekkLenke() {
+  const raw = $("link").value.trim();
+  funnet = null; $("addBtn").disabled = true; $("preview").classList.add("hidden"); $("addMsg").textContent = "";
+  if (!raw) return;
+  const t = tolkId(raw);
+  if (!t) { melding("Fant ingen NRK-ID i teksten.", "err"); return; }
+  const dup = finnesFraFor(t.id);
+  if (dup) { melding(`Finnes allerede i «${dup}».`, "err"); return; }
+  melding("Henter info fra NRK …");
+  try {
+    const r = await fetch(`/api/metadata?id=${t.id}&type=${t.programType}`);
+    if (!r.ok) throw new Error("NRK svarte " + r.status);
+    const d = await r.json();
+    funnet = { ...t, title: finnTittel(d), image: finnBilde(d) };
+    $("pvImg").src = funnet.image; $("pvTitle").textContent = funnet.title || "(fant ingen tittel)";
+    $("pvType").textContent = t.programType === "program" ? "Radioprogram (HLS) – spilles bare med nett" : "Podkast (MP3) – kan lagres offline";
+    $("preview").classList.remove("hidden");
+    if (!$("title").value) $("title").value = funnet.title;
+    melding("");
+    $("addBtn").disabled = false;
+  } catch (e) { melding("Kunne ikke hente episoden: " + e.message, "err"); }
+}
+function melding(t, cls = "") { $("addMsg").textContent = t; $("addMsg").className = "msg " + cls; }
+
+$("secSel").onchange = () => $("newSec").classList.toggle("hidden", $("secSel").value !== "__ny");
+
+$("addBtn").onclick = () => {
+  if (!funnet) return;
+  const title = $("title").value.trim() || funnet.title;
+  if (!title) { melding("Skriv inn en tittel.", "err"); return; }
+  let sec;
+  if ($("secSel").value === "__ny") {
+    const label = $("nsLabel").value.trim();
+    if (!label) { melding("Gi den nye seksjonen et navn.", "err"); return; }
+    const f = FARGER[+$("nsColor").value];
+    let id = label.toLowerCase().normalize("NFKD").replace(/[̀-ͯ]/g, "").replace(/æ/g, "ae").replace(/ø/g, "o").replace(/å/g, "a").replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "seksjon";
+    while (sections.some(s => s.id === id)) id += "-2";
+    sec = { id, label, icon: $("nsIcon").value.trim() || "🎧", accent: f.accent, color: f.color, items: [] };
+    sections.push(sec);
+  } else {
+    sec = sections.find(s => s.id === $("secSel").value);
+  }
+  const item = { id: funnet.id, title, emoji: $("emoji").value.trim() || "🎵" };
+  if (funnet.programType === "program") item.programType = "program";
+  sec.items.push(item);
+  settUlagret(true);
+  ["link", "title", "emoji", "nsLabel", "nsIcon"].forEach(i => $(i).value = "");
+  funnet = null; $("addBtn").disabled = true; $("preview").classList.add("hidden");
+  melding(`✓ «${title}» lagt til i ${sec.label}. Husk å trykke Lagre.`, "ok");
+  tegn();
+  $("secSel").value = sec.id; $("newSec").classList.add("hidden");
+};
+
+// ── Liste ─────────────────────────────────────────────────
+function flytt(arr, i, dir) {
+  const j = i + dir; if (j < 0 || j >= arr.length) return;
+  [arr[i], arr[j]] = [arr[j], arr[i]]; settUlagret(true); tegn();
+}
+function esc(s) { return String(s).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c])); }
+
+function tegn() {
+  // Seksjonsvalg
+  const valgt = $("secSel").value;
+  $("secSel").innerHTML = sections.map(s => `<option value="${esc(s.id)}">${esc(s.icon || "")} ${esc(s.label)}</option>`).join("") + `<option value="__ny">➕ Ny seksjon …</option>`;
+  if (valgt && [...$("secSel").options].some(o => o.value === valgt)) $("secSel").value = valgt;
+  $("newSec").classList.toggle("hidden", $("secSel").value !== "__ny");
+  $("nsColor").innerHTML = FARGER.map((f, i) => `<option value="${i}">${f.navn}</option>`).join("");
+
+  const antall = sections.reduce((n, s) => n + s.items.length, 0);
+  $("list").innerHTML = `<p class="muted">${sections.length} seksjoner · ${antall} episoder</p>` + sections.map((s, si) => `
+    <div class="section">
+      <div class="sec-head" style="background:${esc(s.color || "#eee")};color:${esc(s.accent || "#333")}">
+        <span style="font-size:20px">${esc(s.icon || "")}</span>
+        <span class="name">${esc(s.label)}</span>
+        <span class="count">${s.items.length}</span>
+        <button class="iconbtn" data-a="secUp" data-s="${si}" title="Flytt opp">⬆️</button>
+        <button class="iconbtn" data-a="secDown" data-s="${si}" title="Flytt ned">⬇️</button>
+        <button class="iconbtn" data-a="secRename" data-s="${si}" title="Gi nytt navn">✏️</button>
+        <button class="iconbtn" data-a="secDel" data-s="${si}" title="Slett seksjon">🗑️</button>
+      </div>
+      ${s.items.map((it, ii) => `
+        <div class="item">
+          <input class="emoji" value="${esc(it.emoji || "")}" data-a="emoji" data-s="${si}" data-i="${ii}" maxlength="8">
+          <input class="title" value="${esc(it.title)}" data-a="title" data-s="${si}" data-i="${ii}">
+          ${it.programType === "program" ? '<span class="tag">kun nett</span>' : ""}
+          <button class="iconbtn" data-a="up" data-s="${si}" data-i="${ii}">⬆️</button>
+          <button class="iconbtn" data-a="down" data-s="${si}" data-i="${ii}">⬇️</button>
+          <button class="iconbtn" data-a="del" data-s="${si}" data-i="${ii}">🗑️</button>
+        </div>`).join("")}
+    </div>`).join("");
+}
+
+$("list").addEventListener("click", e => {
+  const b = e.target.closest("button[data-a]"); if (!b) return;
+  const si = +b.dataset.s, ii = +b.dataset.i, s = sections[si];
+  switch (b.dataset.a) {
+    case "up": flytt(s.items, ii, -1); break;
+    case "down": flytt(s.items, ii, 1); break;
+    case "del":
+      if (confirm(`Fjerne «${s.items[ii].title}»?`)) { s.items.splice(ii, 1); settUlagret(true); tegn(); }
+      break;
+    case "secUp": flytt(sections, si, -1); break;
+    case "secDown": flytt(sections, si, 1); break;
+    case "secRename": {
+      const n = prompt("Nytt navn på seksjonen:", s.label); if (!n?.trim()) break;
+      const ik = prompt("Ikon (emoji):", s.icon || "");
+      s.label = n.trim(); if (ik !== null) s.icon = ik.trim(); settUlagret(true); tegn(); break;
+    }
+    case "secDel":
+      if (s.items.length && !confirm(`Slette «${s.label}» med ${s.items.length} episoder?`)) break;
+      sections.splice(si, 1); settUlagret(true); tegn(); break;
+  }
+});
+$("list").addEventListener("change", e => {
+  const el = e.target; if (!el.dataset.a) return;
+  const it = sections[+el.dataset.s].items[+el.dataset.i];
+  if (el.dataset.a === "title" && el.value.trim()) it.title = el.value.trim();
+  if (el.dataset.a === "emoji") it.emoji = el.value.trim();
+  settUlagret(true);
+});
+</script>
+</body>
+</html>
