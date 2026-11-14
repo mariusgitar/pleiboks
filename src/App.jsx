@@ -74,6 +74,8 @@ const LS_KEYS = {
   mode:          "pb_mode",            // "mini" | "miniplus" | "junior"
   miniplusSerier:"pb_miniplus_serier", // JSON array av seksjons-IDer (maks 5, i fane-rekkefølge)
   miniplusStil:  "pb_miniplus_stil",   // "cover" | "ikon" — hva seriefanene viser
+  volum:         "pb_volum",           // 0–4, indeks i VOLUM_TRINN
+  volumMaks:     "pb_volum_maks",      // 0–4, høyeste trinn barnet kan velge
   miniIds:       "pb_mini_ids",        // JSON array av valgte item-IDer
   onboarded:     "pb_onboarded",       // "1" når onboarding er fullført
   spotifyEnabled:"pb_spotify_enabled", // "1" | "0" — global bryter for begge moduser
@@ -102,6 +104,15 @@ function saveJson(key, value) {
   try { localStorage.setItem(key, JSON.stringify(value)); } catch {}
 }
 const MAKS_SERIER = 5;
+
+// ── Volum i appen ──────────────────────────────────────────────────
+// Web-apper kan ikke endre telefonens systemvolum, bare dempe lyden fra det nivået.
+// iOS ignorerer audio.volume helt, så der skjules volumknappene (sjekkes ved å prøve).
+const VOLUM_TRINN = [0.15, 0.3, 0.5, 0.75, 1];
+const KAN_SETTE_VOLUM = (() => {
+  try { const a = new Audio(); a.volume = 0.5; return Math.abs(a.volume - 0.5) < 0.01; } catch { return false; }
+})();
+const ER_ANDROID = typeof navigator !== "undefined" && /Android/i.test(navigator.userAgent);
 function loadOnboarded() {
   try { return localStorage.getItem(LS_KEYS.onboarded) === "1"; }
   catch { return false; }
@@ -362,7 +373,7 @@ function ParentPinModal({ onSuccess, onCancel }) {
 }
 
 // ── Foreldrepanel: bytt modus og velg Mini-utvalg ─────────────────
-function ParentPanel({ nrkSections, offline, mode, setMode, miniIds, setMiniIds, miniplusSerier, setMiniplusSerier, miniplusStil, setMiniplusStil, spotifyEnabled, setSpotifyEnabled, onClose }) {
+function ParentPanel({ nrkSections, offline, volumMaks, setVolumMaks, mode, setMode, miniIds, setMiniIds, miniplusSerier, setMiniplusSerier, miniplusStil, setMiniplusStil, spotifyEnabled, setSpotifyEnabled, onClose }) {
   function toggleItem(id) {
     setMiniIds(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]);
   }
@@ -415,6 +426,36 @@ function ParentPanel({ nrkSections, offline, mode, setMode, miniIds, setMiniIds,
             }} />
           </button>
         </div>
+
+        {/* Volum og Bluetooth */}
+        {(KAN_SETTE_VOLUM || ER_ANDROID) && (
+          <div style={{ marginBottom:28, padding:"14px 16px", background:"#fff", borderRadius:16, border:"2px solid #eee" }}>
+            {KAN_SETTE_VOLUM && (
+              <>
+                <div style={{ fontWeight:900, fontSize:15, color:"#1a1a1a", marginBottom:4 }}>🔊 Høyeste volum barnet kan velge</div>
+                <div style={{ fontSize:11, color:"#888", fontWeight:700, marginBottom:10 }}>
+                  Sett telefonens eget volum høyt — appen demper fra det nivået.
+                </div>
+                <div style={{ display:"flex", gap:6 }}>
+                  {VOLUM_TRINN.map((v, i) => (
+                    <button key={i} onClick={() => setVolumMaks(i)} style={{
+                      flex:1, padding:"10px 0", borderRadius:10, fontFamily:"inherit", fontWeight:800, fontSize:13, cursor:"pointer",
+                      background: volumMaks === i ? "#1B4D5C" : "#fff",
+                      color: volumMaks === i ? "#fff" : "#1a1a1a",
+                      border: volumMaks === i ? "none" : "2px solid #eee",
+                    }}>{Math.round(v * 100)}%</button>
+                  ))}
+                </div>
+              </>
+            )}
+            {ER_ANDROID && (
+              <a href="intent:#Intent;action=android.settings.BLUETOOTH_SETTINGS;end" style={{
+                display:"block", marginTop: KAN_SETTE_VOLUM ? 14 : 0, padding:"12px", borderRadius:12, textAlign:"center",
+                background:"#E3F2F9", color:"#1B4D5C", fontWeight:800, fontSize:14, textDecoration:"none",
+              }}>🔵 Åpne Bluetooth-innstillinger</a>
+            )}
+          </div>
+        )}
 
         {/* Offline-status */}
         <div style={{ marginBottom:28, padding:"14px 16px", background:"#fff", borderRadius:16, border:"2px solid #eee" }}>
@@ -572,7 +613,30 @@ function CoverImg({ item, sectionColor, size, width, radius, playing, onClick, m
 }
 
 // ── Fullskjerm-spiller ────────────────────────────────────────────
-function FullPlayer({ item, section, source, playing, loading, progress, duration, onToggle, onClose, onSeek, onPrev, onNext }) {
+// ── Volumknapper: store − / + med prikker som viser nivå ─────────
+function VolumKnapper({ volum }) {
+  if (!volum) return null;
+  const { trinn, maks, onEndre } = volum;
+  const knapp = (aktiv) => ({
+    width:52, height:52, borderRadius:"50%", padding:0, fontSize:24, lineHeight:1,
+    background:"rgba(255,255,255,0.14)", border:"2px solid rgba(255,255,255,0.25)",
+    display:"flex", alignItems:"center", justifyContent:"center",
+    cursor: aktiv ? "pointer" : "default", opacity: aktiv ? 1 : 0.35, fontFamily:"inherit",
+  });
+  return (
+    <div style={{ position:"relative", zIndex:1, display:"flex", alignItems:"center", justifyContent:"center", gap:16, marginTop:22 }}>
+      <button aria-label="Lavere" disabled={trinn <= 0} onClick={() => onEndre(trinn - 1)} style={knapp(trinn > 0)}>🔈</button>
+      <div style={{ display:"flex", alignItems:"flex-end", gap:6, height:30 }}>
+        {Array.from({ length: maks + 1 }).map((_, i) => (
+          <div key={i} style={{ width:10, height:10 + i * 5, borderRadius:4, background: i <= trinn ? "#fff" : "rgba(255,255,255,0.25)", transition:"background 0.15s" }} />
+        ))}
+      </div>
+      <button aria-label="Høyere" disabled={trinn >= maks} onClick={() => onEndre(trinn + 1)} style={knapp(trinn < maks)}>🔊</button>
+    </div>
+  );
+}
+
+function FullPlayer({ item, section, source, playing, loading, progress, duration, onToggle, onClose, onSeek, onPrev, onNext, volum }) {
   const pct = duration ? (progress / duration) * 100 : 0;
   return (
     <div style={{ position:"fixed", inset:0, zIndex:100, background:section.accent, display:"flex", flexDirection:"column", alignItems:"center", padding:"0 32px 48px", fontFamily:"'Nunito',system-ui,sans-serif" }}>
@@ -611,6 +675,7 @@ function FullPlayer({ item, section, source, playing, loading, progress, duratio
         }
         <button onClick={onNext} style={{ width:52, height:52, borderRadius:"50%", background:"rgba(255,255,255,0.1)", border:"2px solid rgba(255,255,255,0.22)", display:"flex", alignItems:"center", justifyContent:"center", cursor:"pointer", padding:0 }}><NextIcon /></button>
       </div>
+      {source !== "spotify" && <VolumKnapper volum={volum} />}
     </div>
   );
 }
@@ -889,7 +954,7 @@ const MiniPlus = memo(function MiniPlus({ sections, covers, stil, activeId, sour
 });
 
 // ── iPad spiller — også utenfor App ──────────────────────────────
-const IpadPlayer = memo(function IpadPlayer({ activeItem, activeSection, source, playing, loading, progress, duration, onToggle, onPrev, onNext, onSeek }) {
+const IpadPlayer = memo(function IpadPlayer({ activeItem, activeSection, source, playing, loading, progress, duration, onToggle, onPrev, onNext, onSeek, volum }) {
   if (!activeItem || !activeSection) return null;
   return (
     <div style={{ width:"100%", height:"clamp(560px, 72vh, 680px)", background:activeSection.accent, borderRadius:28, display:"flex", flexDirection:"column", padding:"28px 28px 32px", position:"sticky", top:32, alignSelf:"start", overflow:"hidden", boxShadow:"0 10px 36px rgba(0,0,0,0.18)", transition:"background 0.3s" }}>
@@ -929,6 +994,7 @@ const IpadPlayer = memo(function IpadPlayer({ activeItem, activeSection, source,
             }
             <button onClick={onNext} style={{ width:48, height:48, borderRadius:"50%", background:"rgba(255,255,255,0.1)", border:"2px solid rgba(255,255,255,0.2)", display:"flex", alignItems:"center", justifyContent:"center", cursor:"pointer", padding:0 }}><NextIcon size={20} /></button>
           </div>
+          {source !== "spotify" && <VolumKnapper volum={volum} />}
         </div>
       </div>
     </div>
@@ -961,6 +1027,8 @@ export default function App() {
   const [miniIds, setMiniIdsState] = useState(() => loadMiniIds());
   const [miniplusSerier, setMiniplusSerierState] = useState(() => loadJson(LS_KEYS.miniplusSerier, []));
   const [miniplusStil, setMiniplusStilState]     = useState(() => loadJson(LS_KEYS.miniplusStil, "cover"));
+  const [volumMaks, setVolumMaksState]           = useState(() => loadJson(LS_KEYS.volumMaks, VOLUM_TRINN.length - 1));
+  const [volumTrinn, setVolumTrinnState]         = useState(() => loadJson(LS_KEYS.volum, 3));
   const [spotifyEnabled, setSpotifyEnabledState] = useState(() => loadSpotifyEnabled());
   const [showOnboarding, setShowOnboarding] = useState(() => !loadOnboarded());
   const [showPinModal, setShowPinModal]     = useState(false);
@@ -990,6 +1058,11 @@ export default function App() {
     });
   }
   function setMiniplusStil(v) { setMiniplusStilState(v); saveJson(LS_KEYS.miniplusStil, v); }
+  function setVolumTrinn(t) { setVolumTrinnState(t); saveJson(LS_KEYS.volum, t); }
+  function setVolumMaks(m) {
+    setVolumMaksState(m); saveJson(LS_KEYS.volumMaks, m);
+    if (volumTrinn > m) setVolumTrinn(m);
+  }
   function setMiniIds(updater) {
     setMiniIdsState(prev => {
       const next = typeof updater === "function" ? updater(prev) : updater;
@@ -1035,6 +1108,13 @@ export default function App() {
     window.addEventListener("resize", handler);
     return () => window.removeEventListener("resize", handler);
   }, []);
+
+  // Volum: gjelder lydelementet (NRK-episoder). Begrenses av foreldrenes maks.
+  const effektivtTrinn = Math.min(volumTrinn, volumMaks);
+  useEffect(() => {
+    if (audioRef.current) audioRef.current.volume = VOLUM_TRINN[effektivtTrinn];
+  }, [effektivtTrinn]);
+  const volum = KAN_SETTE_VOLUM ? { trinn: effektivtTrinn, maks: volumMaks, onEndre: setVolumTrinn } : null;
 
   // Nett av/på
   useEffect(() => {
@@ -1422,6 +1502,7 @@ export default function App() {
         <ParentPanel
           nrkSections={nrkSections}
           offline={{ ...offlineStatus(nrkSections), online, antall: nrkSections.reduce((n, s) => n + s.items.length, 0) }}
+          volumMaks={volumMaks} setVolumMaks={setVolumMaks}
           mode={mode} setMode={setMode}
           miniIds={miniIds} setMiniIds={setMiniIds}
           miniplusSerier={miniplusSerier} setMiniplusSerier={setMiniplusSerier}
@@ -1443,6 +1524,7 @@ export default function App() {
             activeItem={activeItem} activeSection={activeSection} source={source}
             playing={playing} loading={loading} progress={progress} duration={duration}
             onToggle={togglePlay} onPrev={() => navigate(-1)} onNext={() => navigate(1)} onSeek={seek}
+            volum={volum}
           />
           <div style={{ minWidth:0 }}>
             <div style={{ marginBottom:20 }}>
@@ -1463,7 +1545,7 @@ export default function App() {
         // ── Mobil ──
         <>
           {fullscreen && activeItem && activeSection && (
-            <FullPlayer item={activeItem} section={activeSection} source={source} playing={playing} loading={loading} progress={progress} duration={duration} onToggle={togglePlay} onClose={() => setFullscreen(false)} onSeek={seek} onPrev={() => navigate(-1)} onNext={() => navigate(1)} />
+            <FullPlayer item={activeItem} section={activeSection} source={source} playing={playing} loading={loading} progress={progress} duration={duration} onToggle={togglePlay} onClose={() => setFullscreen(false)} onSeek={seek} onPrev={() => navigate(-1)} onNext={() => navigate(1)} volum={volum} />
           )}
           <div style={{ position:"relative", zIndex:1, maxWidth:480, margin:"0 auto", padding:"0 0 120px" }}>
             <div style={{ padding:"3rem 1.1rem 1rem" }}>
