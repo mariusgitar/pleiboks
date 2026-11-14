@@ -614,7 +614,7 @@ function CoverImg({ item, sectionColor, size, width, radius, playing, onClick, m
 
 // ── Fullskjerm-spiller ────────────────────────────────────────────
 // ── Volumknapper: store − / + med prikker som viser nivå ─────────
-function VolumKnapper({ volum }) {
+function VolumKnapper({ volum, kompakt = false }) {
   if (!volum) return null;
   const { trinn, maks, onEndre } = volum;
   const knapp = (aktiv) => ({
@@ -624,7 +624,7 @@ function VolumKnapper({ volum }) {
     cursor: aktiv ? "pointer" : "default", opacity: aktiv ? 1 : 0.35, fontFamily:"inherit",
   });
   return (
-    <div style={{ position:"relative", zIndex:1, display:"flex", alignItems:"center", justifyContent:"center", gap:16, marginTop:22 }}>
+    <div style={{ position:"relative", zIndex:1, display:"flex", alignItems:"center", justifyContent:"center", gap:16, marginTop: kompakt ? 12 : 22, flexShrink:0 }}>
       <button aria-label="Lavere" disabled={trinn <= 0} onClick={() => onEndre(trinn - 1)} style={knapp(trinn > 0)}>🔈</button>
       <div style={{ display:"flex", alignItems:"flex-end", gap:6, height:30 }}>
         {Array.from({ length: maks + 1 }).map((_, i) => (
@@ -638,17 +638,28 @@ function VolumKnapper({ volum }) {
 
 function FullPlayer({ item, section, source, playing, loading, progress, duration, onToggle, onClose, onSeek, onPrev, onNext, volum }) {
   const pct = duration ? (progress / duration) * 100 : 0;
+  // Tilpass til lave skjermer (f.eks. Galaxy S7): krymp coverbildet og luft så alt får plass
+  const [hoyde, setHoyde] = useState(() => window.innerHeight);
+  useEffect(() => {
+    const f = () => setHoyde(window.innerHeight);
+    window.addEventListener("resize", f);
+    return () => window.removeEventListener("resize", f);
+  }, []);
+  const medVolum = !!volum && source !== "spotify";
+  const lav = hoyde < 760;
+  const coverH = Math.round(Math.max(110, Math.min(236, hoyde - (medVolum ? 450 : 390))));
+  const coverW = Math.round(coverH * 300 / 236);
   return (
-    <div style={{ position:"fixed", inset:0, zIndex:100, background:section.accent, display:"flex", flexDirection:"column", alignItems:"center", padding:"0 32px 48px", fontFamily:"'Nunito',system-ui,sans-serif" }}>
+    <div style={{ position:"fixed", inset:0, zIndex:100, background:section.accent, display:"flex", flexDirection:"column", alignItems:"center", padding: lav ? "0 24px 18px" : "0 32px 48px", fontFamily:"'Nunito',system-ui,sans-serif", overflowY:"auto" }}>
       <div style={{ position:"absolute", inset:0, background:"linear-gradient(160deg,rgba(255,255,255,0.07) 0%,rgba(0,0,0,0.28) 100%)", pointerEvents:"none" }} />
       <div style={{ position:"relative", zIndex:1, width:"100%", display:"flex", justifyContent:"center", paddingTop:16, paddingBottom:8, cursor:"pointer" }} onClick={onClose}>
         <div style={{ width:36, height:5, borderRadius:3, background:"rgba(255,255,255,0.35)" }} />
       </div>
-      <div style={{ position:"relative", zIndex:1, fontSize:"0.68rem", fontWeight:800, color:"rgba(255,255,255,0.5)", letterSpacing:"0.18em", textTransform:"uppercase", marginTop:"auto", marginBottom:"1.2rem" }}>
+      <div style={{ position:"relative", zIndex:1, fontSize:"0.68rem", fontWeight:800, color:"rgba(255,255,255,0.5)", letterSpacing:"0.18em", textTransform:"uppercase", marginTop:"auto", marginBottom: lav ? "0.6rem" : "1.2rem" }}>
         {source === "spotify" ? "Kutoppen · Spotify" : "NRK Super"}
       </div>
-      <div style={{ position:"relative", zIndex:1, marginBottom:"1.6rem" }}>
-        <CoverImg item={item} sectionColor={section.color} size={236} width={300} radius={28} playing={playing} onClick={onClose} mini={false} />
+      <div style={{ position:"relative", zIndex:1, marginBottom: lav ? "0.9rem" : "1.6rem" }}>
+        <CoverImg item={item} sectionColor={section.color} size={coverH} width={coverW} radius={lav ? 22 : 28} playing={playing} onClick={onClose} mini={false} />
       </div>
       <div style={{ position:"relative", zIndex:1, width:"100%", textAlign:"left", marginBottom:"auto" }}>
         <div style={{ color:"#fff", fontSize:"1.5rem", fontWeight:900, lineHeight:1.2, marginBottom:4 }}>{item.emoji && <span style={{ marginRight:8 }}>{item.emoji}</span>}{item.title}</div>
@@ -665,7 +676,7 @@ function FullPlayer({ item, section, source, playing, loading, progress, duratio
           </div>
         </div>
       )}
-      <div style={{ position:"relative", zIndex:1, display:"flex", alignItems:"center", justifyContent:"center", gap:24, marginTop:20 }}>
+      <div style={{ position:"relative", zIndex:1, display:"flex", alignItems:"center", justifyContent:"center", gap:24, marginTop: lav ? 10 : 20, flexShrink:0 }}>
         <button onClick={onPrev} style={{ width:52, height:52, borderRadius:"50%", background:"rgba(255,255,255,0.1)", border:"2px solid rgba(255,255,255,0.22)", display:"flex", alignItems:"center", justifyContent:"center", cursor:"pointer", padding:0 }}><PrevIcon /></button>
         {loading
           ? <div style={{ color:"rgba(255,255,255,0.6)", fontWeight:800, fontSize:14 }}>Laster…</div>
@@ -675,7 +686,7 @@ function FullPlayer({ item, section, source, playing, loading, progress, duratio
         }
         <button onClick={onNext} style={{ width:52, height:52, borderRadius:"50%", background:"rgba(255,255,255,0.1)", border:"2px solid rgba(255,255,255,0.22)", display:"flex", alignItems:"center", justifyContent:"center", cursor:"pointer", padding:0 }}><NextIcon /></button>
       </div>
-      {source !== "spotify" && <VolumKnapper volum={volum} />}
+      {source !== "spotify" && <VolumKnapper volum={volum} kompakt={lav} />}
     </div>
   );
 }
