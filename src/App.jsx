@@ -3,6 +3,8 @@ import { fetchRssFeed, fetchRssAudioUrl, fetchRssCover } from "./rss.js";
 import Onboarding from "./Onboarding.jsx";
 import STANDARD_EPISODER from "./episoder-standard.json";
 import { synk, lokalUrl, status as offlineStatus, lagredeIder } from "./offline.js";
+import { BrikkeSkjerm, BrikkeOppsett, tolkBrikke, huskSerie, lagrePosisjon, LS_GRENSE, LS_BRIKKER, GRENSER } from "./Brikke.jsx";
+import { lyttPaaBrikker, sendBrikke, erISkall, kallSkall } from "./skall.js";
 
 // ── Innholdsdata ──────────────────────────────────────────────────
 // PSAPI-BASERT VERSJON (stabil, brukt til brukertesting).
@@ -71,7 +73,7 @@ const SHOW_SPOTIFY = true;
 const PARENT_PIN = "1234";
 
 const LS_KEYS = {
-  mode:          "pb_mode",            // "mini" | "miniplus" | "junior"
+  mode:          "pb_mode",            // "mini" | "miniplus" | "junior" | "brikke"
   miniplusSerier:"pb_miniplus_serier", // JSON array av seksjons-IDer (maks 5, i fane-rekkefølge)
   miniplusStil:  "pb_miniplus_stil",   // "cover" | "ikon" — hva seriefanene viser
   volum:         "pb_volum",           // 0–4, indeks i VOLUM_TRINN
@@ -373,7 +375,7 @@ function ParentPinModal({ onSuccess, onCancel }) {
 }
 
 // ── Foreldrepanel: bytt modus og velg Mini-utvalg ─────────────────
-function ParentPanel({ nrkSections, offline, volumMaks, setVolumMaks, mode, setMode, miniIds, setMiniIds, miniplusSerier, setMiniplusSerier, miniplusStil, setMiniplusStil, spotifyEnabled, setSpotifyEnabled, onClose }) {
+function ParentPanel({ nrkSections, offline, volumMaks, setVolumMaks, mode, setMode, miniIds, setMiniIds, miniplusSerier, setMiniplusSerier, miniplusStil, setMiniplusStil, spotifyEnabled, setSpotifyEnabled, brikker, setBrikker, grense, setGrense, onTestBrikke, onClose }) {
   function toggleItem(id) {
     setMiniIds(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]);
   }
@@ -476,14 +478,15 @@ function ParentPanel({ nrkSections, offline, volumMaks, setVolumMaks, mode, setM
         {/* Modusvalg */}
         <div style={{ marginBottom:28 }}>
           <div style={{ fontWeight:900, fontSize:15, color:"#1a1a1a", marginBottom:10 }}>Visningsmodus</div>
-          <div style={{ display:"flex", gap:8 }}>
+          <div style={{ display:"grid", gridTemplateColumns:"repeat(2, minmax(0, 1fr))", gap:8 }}>
             {[
               { id:"mini",     ikon:"🌱", navn:"Mini",   tekst:"Få, store valg" },
               { id:"miniplus", ikon:"🌿", navn:"Mini+",  tekst:"Serier, store kort" },
               { id:"junior",   ikon:"🌳", navn:"Junior", tekst:"Hele katalogen" },
+              { id:"brikke",   ikon:"🧩", navn:"Brikke", tekst:"Legg på en brikke" },
             ].map(m => (
               <button key={m.id} onClick={() => setMode(m.id)} style={{
-                flex:1, padding:"14px 10px", borderRadius:16,
+                padding:"14px 10px", borderRadius:16,
                 background: mode === m.id ? "#1B4D5C" : "#fff",
                 color: mode === m.id ? "#fff" : "#1a1a1a",
                 border: mode === m.id ? "none" : "2px solid #eee",
@@ -497,6 +500,35 @@ function ParentPanel({ nrkSections, offline, volumMaks, setVolumMaks, mode, setM
             ))}
           </div>
         </div>
+
+        {/* Brikke-modus: grense for å starte forfra, kjente brikker, kiosk */}
+        {mode === "brikke" && (
+          <div>
+            <div style={{ marginBottom:20, padding:"14px 16px", background:"#fff", borderRadius:16, border:"2px solid #eee" }}>
+              <div style={{ fontWeight:900, fontSize:15, color:"#1a1a1a", marginBottom:4 }}>🔁 Start forfra etter pause på</div>
+              <div style={{ fontSize:11, color:"#888", fontWeight:700, marginBottom:10 }}>Kortere pauser fortsetter der det slapp. Ferdige episoder starter alltid forfra.</div>
+              <div style={{ display:"flex", gap:6 }}>
+                {GRENSER.map(([id, navn]) => (
+                  <button key={id} onClick={() => setGrense(id)} style={{
+                    flex:1, padding:"10px 0", borderRadius:10, fontFamily:"inherit", fontWeight:800, fontSize:13, cursor:"pointer",
+                    background: grense === id ? "#1B4D5C" : "#fff",
+                    color: grense === id ? "#fff" : "#1a1a1a",
+                    border: grense === id ? "none" : "2px solid #eee",
+                  }}>{navn}</button>
+                ))}
+              </div>
+            </div>
+
+            <BrikkeOppsett sections={nrkSections} brikker={brikker} setBrikker={setBrikker} onTest={onTestBrikke} />
+
+            {erISkall() && (
+              <button onClick={() => kallSkall("avsluttKiosk")} style={{
+                width:"100%", marginBottom:20, padding:"14px", borderRadius:14, border:"2px solid #1B4D5C",
+                background:"#fff", color:"#1B4D5C", fontWeight:900, fontSize:14, cursor:"pointer", fontFamily:"inherit",
+              }}>Avslutt kiosk</button>
+            )}
+          </div>
+        )}
 
         {/* Mini+-utvalg: serier */}
         {mode === "miniplus" && (
@@ -1042,6 +1074,20 @@ export default function App() {
   const [volumTrinn, setVolumTrinnState]         = useState(() => loadJson(LS_KEYS.volum, 3));
   const [spotifyEnabled, setSpotifyEnabledState] = useState(() => loadSpotifyEnabled());
   const [showOnboarding, setShowOnboarding] = useState(() => !loadOnboarded());
+  // Brikke-modus
+  const [brikker, setBrikkerState] = useState(() => loadJson(LS_BRIKKER, {}));
+  function setBrikker(updater) {
+    setBrikkerState(prev => {
+      const next = typeof updater === "function" ? updater(prev) : updater;
+      saveJson(LS_BRIKKER, next);
+      return next;
+    });
+  }
+  const [grense, setGrenseState]    = useState(() => loadJson(LS_GRENSE, "12"));
+  const [brikkeMelding, setBrikkeMelding] = useState(null); // { type: "ukjent" | "mangler" | "klar", uid }
+  const [sperret, setSperret]       = useState(false); // nettleseren blokkerte autoplay (f.eks. ?kort= på iPhone)
+  const [ferdig, setFerdig]         = useState(false); // episoden spilte til slutt
+  function setGrense(g) { setGrenseState(g); saveJson(LS_GRENSE, g); }
   const [showPinModal, setShowPinModal]     = useState(false);
   const [showParentPanel, setShowParentPanel] = useState(false);
   const sunTapCount = useRef(0);
@@ -1093,8 +1139,9 @@ export default function App() {
     }
   }
 
-  function handleOnboardingDone(spotifyChoice) {
+  function handleOnboardingDone(spotifyChoice, ekstra) {
     setSpotifyEnabled(spotifyChoice);
+    if (ekstra?.mode) setMode(ekstra.mode);
     saveOnboarded();
     setShowOnboarding(false);
   }
@@ -1102,6 +1149,9 @@ export default function App() {
   const audioRef       = useRef(null);
   const requestIdRef   = useRef(0);
   const lastProgressTs = useRef(0);
+  const lastPosTs      = useRef(0);
+  const pendingSeek    = useRef(null);   // sekunder å hoppe til når neste episode har lastet
+  const activeItemRef  = useRef(null);
 
   // Spotify Web Playback SDK
   const sdkPlayer   = useRef(null);
@@ -1222,9 +1272,28 @@ export default function App() {
       if (now - lastProgressTs.current < 250) return;
       lastProgressTs.current = now;
       setProgress(audio.currentTime);
+      // Husk hvor i episoden vi er (brukes av Brikke-modus for å fortsette)
+      if (now - lastPosTs.current > 5000 && audio.currentTime > 0) {
+        lastPosTs.current = now;
+        lagrePosisjon(activeItemRef.current?.id, audio.currentTime, audio.duration);
+      }
     };
-    const onMeta  = () => setDuration(audio.duration);
-    const onEnded = () => setPlaying(false);
+    const onMeta  = () => {
+      setDuration(audio.duration);
+      if (pendingSeek.current) {
+        try { audio.currentTime = pendingSeek.current; } catch {}
+        pendingSeek.current = null;
+      }
+    };
+    const onPause = () => {
+      if (audio.currentTime > 0) lagrePosisjon(activeItemRef.current?.id, audio.currentTime, audio.duration);
+    };
+    const onEnded = () => {
+      setPlaying(false);
+      setFerdig(true);
+      lagrePosisjon(activeItemRef.current?.id, audio.duration, audio.duration, true);
+    };
+    audio.addEventListener("pause", onPause);
     audio.addEventListener("timeupdate", onTime);
     audio.addEventListener("loadedmetadata", onMeta);
     audio.addEventListener("ended", onEnded);
@@ -1232,6 +1301,7 @@ export default function App() {
       audio.removeEventListener("timeupdate", onTime);
       audio.removeEventListener("loadedmetadata", onMeta);
       audio.removeEventListener("ended", onEnded);
+      audio.removeEventListener("pause", onPause);
     };
   }, []);
 
@@ -1239,8 +1309,70 @@ export default function App() {
     const audio = audioRef.current;
     if (!audio || !nrkUrl) return;
     audio.src = nrkUrl;
-    audio.play().then(() => setPlaying(true)).catch(() => setPlaying(false));
+    setFerdig(false);
+    audio.play()
+      .then(() => { setPlaying(true); setSperret(false); })
+      .catch((e) => { setPlaying(false); if (e?.name === "NotAllowedError") setSperret(true); });
   }, [nrkUrl]);
+
+  activeItemRef.current = activeItem;
+
+  // ── Brikke-modus ──────────────────────────────────────────────────
+  function spillVidere(fraStart) {
+    const audio = audioRef.current;
+    if (!audio) return;
+    if (fraStart) { try { audio.currentTime = 0; } catch {} }
+    setFerdig(false);
+    audio.play()
+      .then(() => { setPlaying(true); setSperret(false); })
+      .catch((e) => { setPlaying(false); if (e?.name === "NotAllowedError") setSperret(true); });
+  }
+
+  function brikkePause() {
+    const audio = audioRef.current;
+    if (audio) audio.pause();
+    setPlaying(false);
+  }
+
+  function brikkeLagtPaa(uid) {
+    // Onboarding og foreldrepanel håndterer brikker selv / ignorerer dem
+    if (showOnboarding || showPinModal || showParentPanel || mode !== "brikke") return;
+    const b = brikker[uid];
+    if (!b?.type) {
+      // Ukjent eller ikke koblet: husk den som «ny» (vises i foreldrepanelet) og vis «Ny brikke»
+      if (!b) setBrikker(prev => ({ ...prev, [uid]: { navn: "", type: null, id: null, ny: true } }));
+      if (playing) brikkePause();
+      setBrikkeMelding({ type: "ukjent", uid });
+      return;
+    }
+    const valg = tolkBrikke(b, tilgjengeligeSections, grense);
+    if (!valg) { if (playing) brikkePause(); setBrikkeMelding({ type: "mangler", uid }); return; }
+    setBrikkeMelding(null);
+    if (valg.section && b.type === "serie") huskSerie(valg.section, valg.item);
+
+    if (source === "nrk" && activeItem?.id === valg.item.id) {
+      if (playing) return;                         // samme brikke mens den spiller → ignoreres
+      spillVidere(!!valg.grunn || ferdig);         // samme brikke igjen → fortsett (eller forfra etter reglene)
+      return;
+    }
+    pendingSeek.current = valg.startFra > 0 ? valg.startFra : null;
+    velgNrk(valg.item, valg.section);
+  }
+
+  // Lytt på brikker fra skallet (eller ?kort= ved testing). Ref-en sørger for fersk tilstand.
+  const brikkeRef = useRef(brikkeLagtPaa);
+  brikkeRef.current = brikkeLagtPaa;
+  useEffect(() => lyttPaaBrikker((uid) => brikkeRef.current(uid)), []);
+
+  // Hold skjermen våken i Brikke-modus (Chrome/Android og nyere iOS)
+  useEffect(() => {
+    if (mode !== "brikke" || showOnboarding || !navigator.wakeLock) return;
+    let lock = null, aktiv = true;
+    const be = () => { if (aktiv && document.visibilityState === "visible") navigator.wakeLock.request("screen").then(l => { lock = l; }).catch(() => {}); };
+    be();
+    document.addEventListener("visibilitychange", be);
+    return () => { aktiv = false; document.removeEventListener("visibilitychange", be); lock?.release().catch(() => {}); };
+  }, [mode, showOnboarding]);
 
   // Spotify Web Playback SDK init
   function initSpotifySDK(initialToken) {
@@ -1292,6 +1424,7 @@ export default function App() {
   function stopAll() {
     // Stopp NRK audio
     const audio = audioRef.current;
+    if (audio && audio.currentTime > 0 && !audio.ended) lagrePosisjon(activeItemRef.current?.id, audio.currentTime, audio.duration);
     if (audio) { audio.pause(); audio.src = ""; }
     // Stopp Spotify SDK om det spiller
     if (sdkPlayer.current && sdkReady.current) {
@@ -1464,6 +1597,22 @@ export default function App() {
 
   const showSpotifySection = SHOW_SPOTIFY && spotifyEnabled && mode !== "miniplus" && (mode === "junior" || visibleSpotifySection.items.length > 0);
 
+  // Hva barneskjermen i Brikke-modus skal vise
+  let brikkeVisning = { tilstand: "tom" };
+  if (mode === "brikke") {
+    if (brikkeMelding?.type === "klar") {
+      const v = tolkBrikke(brikker[brikkeMelding.uid], tilgjengeligeSections, grense);
+      brikkeVisning = v ? { tilstand: "klar", item: v.item, section: v.section, cover: nrkCovers[v.item.id] } : { tilstand: "mangler" };
+    } else if (brikkeMelding) {
+      brikkeVisning = { tilstand: brikkeMelding.type };
+    } else if (source === "nrk" && activeItem && activeSection) {
+      brikkeVisning = {
+        tilstand: loading ? "laster" : playing ? "spiller" : ferdig ? "ferdig" : "pause",
+        item: activeItem, section: activeSection, cover: activeItem.cover || nrkCovers[activeItem.id],
+      };
+    }
+  }
+
   return (
     <div style={{ minHeight:"100vh", fontFamily:"'Nunito',system-ui,sans-serif", position:"relative" }}>
       <style>{`
@@ -1519,7 +1668,13 @@ export default function App() {
           miniplusSerier={miniplusSerier} setMiniplusSerier={setMiniplusSerier}
           miniplusStil={miniplusStil} setMiniplusStil={setMiniplusStil}
           spotifyEnabled={spotifyEnabled} setSpotifyEnabled={setSpotifyEnabled}
-          onClose={() => setShowParentPanel(false)}
+          brikker={brikker} setBrikker={setBrikker} grense={grense} setGrense={setGrense}
+          onTestBrikke={(uid) => { setShowParentPanel(false); setTimeout(() => sendBrikke(uid), 80); }}
+          onClose={() => {
+            setShowParentPanel(false);
+            // Ble «Ny brikke» koblet i panelet? Da er den klar til å legges på igjen.
+            if (brikkeMelding?.type === "ukjent" && brikker[brikkeMelding.uid]?.type) setBrikkeMelding({ type: "klar", uid: brikkeMelding.uid });
+          }}
         />
       )}
 
@@ -1528,7 +1683,16 @@ export default function App() {
 
       {showVoksen && <SpotifyVoksenModal onRetry={handleVoksenRetry} onDismiss={() => setShowVoksen(false)} />}
 
-      {isWide ? (
+      {mode === "brikke" ? (
+        // ── Brikke-modus: bare «legg brikken her» og det som spilles ──
+        <BrikkeSkjerm
+          {...brikkeVisning}
+          progress={progress} duration={duration} sperret={sperret}
+          onPause={brikkePause}
+          onFraStart={() => spillVidere(true)}
+          onStartSperret={() => spillVidere(false)}
+        />
+      ) : isWide ? (
         // ── iPad: to kolonner ──
         <div style={{ position:"relative", zIndex:1, display:"grid", gridTemplateColumns: activeItem ? "340px minmax(0,1fr)" : "minmax(0,1fr)", gap:28, padding:"32px 32px 48px", maxWidth: activeItem ? 1040 : 620, margin:"0 auto", alignItems:"stretch" }}>
           <IpadPlayer
