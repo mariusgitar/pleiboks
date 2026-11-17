@@ -1334,7 +1334,7 @@ export default function App() {
   // ── Brikke-modus ──────────────────────────────────────────────────
   // Hent brikkelisten (kobling brikke → episode/serie). Lagres lokalt så det virker uten nett.
   function hentBrikker() {
-    return fetch("/api/brikker", { cache: "no-store" })
+    return fetch("/api/episodes?liste=brikker", { cache: "no-store" })
       .then(r => r.ok ? r.json() : null)
       .then(d => {
         if (!d?.brikker) return null;
@@ -1378,7 +1378,7 @@ export default function App() {
     let b = brikker[uid];
     if (!b?.type) {
       // Ukjent eller ikke koblet: registrer, sjekk om den er koblet siden sist, ellers vis «Ny brikke»
-      if (!b) fetch("/api/brikker", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ registrer: uid }) }).catch(() => {});
+      if (!b) fetch("/api/episodes?liste=brikker", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ registrer: uid }) }).catch(() => {});
       const fersk = (await hentBrikker())?.[uid];
       if (!fersk?.type) {
         if (playing) brikkePause();

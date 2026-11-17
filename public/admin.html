@@ -424,7 +424,7 @@ $("list").addEventListener("change", e => {
 let brikker = {};
 async function hentBrikker() {
   try {
-    const d = await fetch("/api/brikker", { cache: "no-store" }).then(r => r.json());
+    const d = await fetch("/api/episodes?liste=brikker", { cache: "no-store" }).then(r => r.json());
     brikker = d.brikker || {};
     brikkeMelding("");
   } catch (e) { brikkeMelding("Kunne ikke hente brikker: " + e.message, "err"); }
@@ -473,7 +473,7 @@ $("brikkeListe").addEventListener("click", e => {
 $("brikkeHent").onclick = hentBrikker;
 $("brikkeLagre").onclick = async () => {
   $("brikkeLagre").disabled = true; brikkeMelding("Lagrer …");
-  const r = await fetch("/api/brikker", { method: "POST", headers: { "Content-Type": "application/json", "x-admin-passord": passord }, body: JSON.stringify({ brikker }) });
+  const r = await fetch("/api/episodes?liste=brikker", { method: "POST", headers: { "Content-Type": "application/json", "x-admin-passord": passord }, body: JSON.stringify({ brikker }) });
   const d = await r.json().catch(() => ({}));
   if (!r.ok) { brikkeMelding("Feil: " + (d.error || r.status), "err"); $("brikkeLagre").disabled = false; return; }
   brikkeMelding("✓ Brikker lagret. Boksen henter dem neste gang en brikke legges på.", "ok");

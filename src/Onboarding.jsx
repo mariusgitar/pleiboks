@@ -371,10 +371,10 @@ function SkallOnboarding({ onDone }) {
     return lyttPaaBrikker(async (uid) => {
       setTest({ emoji: "⏳", tekst: "Leser brikken …" });
       try {
-        const d = await fetch("/api/brikker", { cache: "no-store" }).then(r => r.json());
+        const d = await fetch("/api/episodes?liste=brikker", { cache: "no-store" }).then(r => r.json());
         const b = d?.brikker?.[uid];
         if (!b) {
-          await fetch("/api/brikker", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ registrer: uid }) });
+          await fetch("/api/episodes?liste=brikker", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ registrer: uid }) });
           setTest({ emoji: "✅", tekst: "NFC virker! Brikken er ny, og dukker opp i admin så du kan koble den." });
         } else {
           setTest({ emoji: "✅", tekst: `NFC virker! Fant «${b.navn || uid}».` });
