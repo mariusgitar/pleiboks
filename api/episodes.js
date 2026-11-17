@@ -7,7 +7,6 @@
 //   ADMIN_PASSORD          — passordet til /admin.html (velg noe langt, ikke 1234)
 import { put, get } from "@vercel/blob";
 import { createRequire } from "module";
-import { brikkerHandler } from "../lib/brikker.js";
 
 const require = createRequire(import.meta.url);
 const standard = require("../src/episoder-standard.json");
@@ -34,9 +33,6 @@ function valider(data) {
 
 export default async function handler(req, res) {
   res.setHeader("Cache-Control", "no-store");
-
-  // Brikker deler funksjon med episodelisten (se lib/brikker.js)
-  if (req.query?.liste === "brikker") return brikkerHandler(req, res);
 
   if (req.method === "GET") {
     try {

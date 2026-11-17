@@ -368,20 +368,19 @@ function SkallOnboarding({ onDone }) {
   // Brikketest: lytt på brikker bare på dette steget
   useEffect(() => {
     if (steg !== 4) return;
-    return lyttPaaBrikker(async (uid) => {
-      setTest({ emoji: "⏳", tekst: "Leser brikken …" });
+    return lyttPaaBrikker((uid) => {
+      let kjent = null;
       try {
-        const d = await fetch("/api/episodes?liste=brikker", { cache: "no-store" }).then(r => r.json());
-        const b = d?.brikker?.[uid];
-        if (!b) {
-          await fetch("/api/episodes?liste=brikker", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ registrer: uid }) });
-          setTest({ emoji: "✅", tekst: "NFC virker! Brikken er ny, og dukker opp i admin så du kan koble den." });
-        } else {
-          setTest({ emoji: "✅", tekst: `NFC virker! Fant «${b.navn || uid}».` });
+        const alle = JSON.parse(localStorage.getItem("pb_brikker") || "{}");
+        kjent = alle[uid];
+        if (!kjent) {
+          alle[uid] = { navn: "", type: null, id: null, ny: true };
+          localStorage.setItem("pb_brikker", JSON.stringify(alle));
         }
-      } catch {
-        setTest({ emoji: "✅", tekst: "NFC virker! (Fikk ikke sjekket brikken mot admin – mangler nett?)" });
-      }
+      } catch {}
+      setTest(kjent
+        ? { emoji: "✅", tekst: `NFC virker! Fant «${kjent.navn || "brikken"}».` }
+        : { emoji: "✅", tekst: "NFC virker! Brikken er lagret. Du kobler den til en serie eller episode i foreldrepanelet." });
     });
   }, [steg]);
 
@@ -428,7 +427,7 @@ function SkallOnboarding({ onDone }) {
     innhold = (
       <div style={{ padding: "28px 28px 32px" }}>
         {kicker(3)}{tittel("☀️ Foreldretilgang")}
-        {tekst("Det skjulte panelet er der du velger modus, tester brikker og avslutter kiosk. Barnet ser det aldri.")}
+        {tekst("Det skjulte panelet er der du velger modus, kobler brikker og avslutter kiosk. Barnet ser det aldri.")}
         <div style={{ background: "#FFF8E8", borderRadius: 16, padding: "12px 14px", marginBottom: 10 }}>
           <div style={{ fontWeight: 900, fontSize: 13.5, color: "#8a6d1a", marginBottom: 4 }}>Slik åpner du panelet</div>
           <div style={{ fontSize: 13, fontWeight: 600, color: "#7a6020", lineHeight: 1.5 }}>Trykk 5 ganger raskt på sola øverst. Du blir bedt om PIN-koden.</div>

@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect } from "react";
+import { lyttPaaBrikker } from "./skall.js";
 
 // ── Brikke-modus ──────────────────────────────────────────────────
 // Barnet legger en brikke (NFC-kort/kube) på telefonen, og lyden starter.
@@ -12,7 +13,7 @@ import { useState, useRef, useEffect } from "react";
 const LS_POS   = "pb_posisjon";        // { [itemId]: { t, d, ts, ferdig } }
 const LS_SERIE = "pb_brikke_serie";    // { [sectionId]: itemId } — hvor serie-brikker står
 export const LS_GRENSE  = "pb_brikke_grense";  // "6" | "12" | "24" | "aldri"
-export const LS_BRIKKER = "pb_brikker";        // siste kjente brikkeliste (for offline)
+export const LS_BRIKKER = "pb_brikker";        // { [uid]: { navn, type: "episode"|"serie"|null, id, ny } } — lagres bare på telefonen
 export const GRENSER = [["6", "6 t"], ["12", "12 t"], ["24", "24 t"], ["aldri", "Aldri"]];
 
 function les(key, fallback) {
@@ -67,6 +68,69 @@ export function huskSerie(section, item) {
   const m = les(LS_SERIE, {});
   m[section.id] = item.id;
   skriv(LS_SERIE, m);
+}
+
+// ── Koble brikker (i foreldrepanelet) ────────────────────────────
+// Mens panelet er åpent: legg en brikke på telefonen, så dukker den opp her
+// (ny eller kjent) og kan kobles til en serie eller episode.
+export function BrikkeOppsett({ sections, brikker, setBrikker, onTest }) {
+  const [sist, setSist] = useState(null); // uid som nettopp ble lagt på
+
+  useEffect(() => lyttPaaBrikker((uid) => {
+    setBrikker((prev) => prev[uid] ? prev : { ...prev, [uid]: { navn: "", type: null, id: null, ny: true } });
+    setSist(uid);
+  }), []);
+
+  function endre(uid, felt) {
+    setBrikker((prev) => ({ ...prev, [uid]: { ...prev[uid], ...felt } }));
+  }
+  function glem(uid) {
+    if (!confirm(`Glemme «${brikker[uid]?.navn || "brikken"}»? Den blir ny igjen hvis den legges på.`)) return;
+    setBrikker((prev) => { const n = { ...prev }; delete n[uid]; return n; });
+  }
+
+  const uider = Object.keys(brikker).sort((a, b) => (a === sist ? -1 : b === sist ? 1 : (brikker[b].ny ? 1 : 0) - (brikker[a].ny ? 1 : 0)));
+  const felt = { width:"100%", padding:"10px 12px", fontSize:15, border:"1.5px solid #d6dde0", borderRadius:10, background:"#fff", fontFamily:"inherit", fontWeight:700, color:"#1a1a1a" };
+
+  return (
+    <div style={{ marginBottom:20, padding:"14px 16px", background:"#fff", borderRadius:16, border:"2px solid #eee" }}>
+      <div style={{ fontWeight:900, fontSize:15, color:"#1a1a1a", marginBottom:4 }}>🧩 Brikker</div>
+      <div style={{ background:"#E3F2F9", borderRadius:12, padding:"10px 12px", fontSize:13, fontWeight:800, color:"#1B4D5C", marginBottom:10 }}>
+        📲 Legg en brikke på telefonen for å koble den.
+      </div>
+      {uider.length === 0 && <div style={{ fontSize:13, color:"#888", fontWeight:700 }}>Ingen brikker ennå.</div>}
+      {uider.map((uid) => {
+        const b = brikker[uid];
+        const verdi = b.type ? `${b.type}|${b.id}` : "";
+        return (
+          <div key={uid} style={{ padding:"12px 0", borderTop:"1px solid #f2f2f2", ...(uid === sist ? { background:"#FFF8E8", margin:"0 -16px", padding:"12px 16px" } : {}) }}>
+            <div style={{ display:"flex", gap:8, alignItems:"center", marginBottom:8 }}>
+              <input value={b.navn || ""} placeholder="Navn, f.eks. Dinokort" onChange={(e) => endre(uid, { navn: e.target.value })} style={{ ...felt, flex:1 }} />
+              {b.ny && !b.type && <span style={{ fontSize:11, fontWeight:800, background:"#FFF3DC", color:"#B85A00", borderRadius:6, padding:"2px 7px" }}>Ny</span>}
+            </div>
+            <select value={verdi} onChange={(e) => {
+              const [type, id] = e.target.value ? e.target.value.split("|") : [null, null];
+              endre(uid, { type, id, ny: type ? false : b.ny });
+            }} style={felt}>
+              <option value="">Ikke koblet</option>
+              <optgroup label="Hele serien (fortsetter der barnet slapp)">
+                {sections.map((s) => <option key={s.id} value={`serie|${s.id}`}>{s.icon} {s.label}</option>)}
+              </optgroup>
+              {sections.map((s) => (
+                <optgroup key={s.id} label={s.label}>
+                  {s.items.map((i) => <option key={i.id} value={`episode|${i.id}`}>{i.emoji} {i.title}</option>)}
+                </optgroup>
+              ))}
+            </select>
+            <div style={{ display:"flex", gap:8, marginTop:8 }}>
+              <button disabled={!b.type} onClick={() => onTest(uid)} style={{ flex:1, padding:"9px", borderRadius:10, border:"none", background: b.type ? "#E3F2F9" : "#f2f2f2", color: b.type ? "#1B4D5C" : "#aaa", fontWeight:800, fontSize:13, cursor: b.type ? "pointer" : "default", fontFamily:"inherit" }}>▶ Test</button>
+              <button onClick={() => glem(uid)} style={{ padding:"9px 14px", borderRadius:10, border:"none", background:"#fdecea", color:"#C0392B", fontWeight:800, fontSize:13, cursor:"pointer", fontFamily:"inherit" }}>Glem</button>
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
 }
 
 // ── Barneskjermen ────────────────────────────────────────────────

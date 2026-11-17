@@ -3,7 +3,7 @@ import { fetchRssFeed, fetchRssAudioUrl, fetchRssCover } from "./rss.js";
 import Onboarding from "./Onboarding.jsx";
 import STANDARD_EPISODER from "./episoder-standard.json";
 import { synk, lokalUrl, status as offlineStatus, lagredeIder } from "./offline.js";
-import { BrikkeSkjerm, tolkBrikke, huskSerie, lagrePosisjon, LS_GRENSE, LS_BRIKKER, GRENSER } from "./Brikke.jsx";
+import { BrikkeSkjerm, BrikkeOppsett, tolkBrikke, huskSerie, lagrePosisjon, LS_GRENSE, LS_BRIKKER, GRENSER } from "./Brikke.jsx";
 import { lyttPaaBrikker, sendBrikke, erISkall, kallSkall } from "./skall.js";
 
 // ── Innholdsdata ──────────────────────────────────────────────────
@@ -375,7 +375,7 @@ function ParentPinModal({ onSuccess, onCancel }) {
 }
 
 // ── Foreldrepanel: bytt modus og velg Mini-utvalg ─────────────────
-function ParentPanel({ nrkSections, offline, volumMaks, setVolumMaks, mode, setMode, miniIds, setMiniIds, miniplusSerier, setMiniplusSerier, miniplusStil, setMiniplusStil, spotifyEnabled, setSpotifyEnabled, brikker, grense, setGrense, onTestBrikke, onClose }) {
+function ParentPanel({ nrkSections, offline, volumMaks, setVolumMaks, mode, setMode, miniIds, setMiniIds, miniplusSerier, setMiniplusSerier, miniplusStil, setMiniplusStil, spotifyEnabled, setSpotifyEnabled, brikker, setBrikker, grense, setGrense, onTestBrikke, onClose }) {
   function toggleItem(id) {
     setMiniIds(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]);
   }
@@ -519,28 +519,7 @@ function ParentPanel({ nrkSections, offline, volumMaks, setVolumMaks, mode, setM
               </div>
             </div>
 
-            <div style={{ marginBottom:20, padding:"14px 16px", background:"#fff", borderRadius:16, border:"2px solid #eee" }}>
-              <div style={{ fontWeight:900, fontSize:15, color:"#1a1a1a", marginBottom:4 }}>🧩 Brikker</div>
-              <div style={{ fontSize:11, color:"#888", fontWeight:700, marginBottom:10 }}>
-                Nye brikker dukker opp i admin når de legges på. Trykk «Test» for å late som en brikke legges på.
-              </div>
-              {Object.keys(brikker).length === 0 && <div style={{ fontSize:13, color:"#555", fontWeight:700 }}>Ingen brikker ennå.</div>}
-              {Object.entries(brikker).map(([uid, b]) => {
-                const s = b.type === "serie" ? nrkSections.find(x => x.id === b.id) : nrkSections.find(x => x.items.some(i => i.id === b.id));
-                const ep = b.type === "episode" ? s?.items.find(i => i.id === b.id) : null;
-                const tekst = !b.type ? "Ikke koblet" : b.type === "serie" ? `Serie: ${s?.label || "?"}` : `${ep?.emoji || ""} ${ep?.title || "?"}`;
-                return (
-                  <div key={uid} style={{ display:"flex", alignItems:"center", gap:10, padding:"8px 0", borderTop:"1px solid #f2f2f2" }}>
-                    <div style={{ flex:1, minWidth:0 }}>
-                      <div style={{ fontWeight:800, fontSize:14, color:"#1a1a1a" }}>{b.navn || uid}</div>
-                      <div style={{ fontSize:12, fontWeight:700, color:"#888", whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis" }}>{tekst}</div>
-                    </div>
-                    <button onClick={() => onTestBrikke(uid)} style={{ padding:"8px 14px", borderRadius:10, border:"none", background:"#E3F2F9", color:"#1B4D5C", fontWeight:800, fontSize:13, cursor:"pointer", fontFamily:"inherit" }}>Test</button>
-                  </div>
-                );
-              })}
-              <a href="/admin.html" target="_blank" rel="noopener" style={{ display:"block", marginTop:10, fontSize:13, fontWeight:800, color:"#1B6B8A" }}>Koble brikker i admin →</a>
-            </div>
+            <BrikkeOppsett sections={nrkSections} brikker={brikker} setBrikker={setBrikker} onTest={onTestBrikke} />
 
             {erISkall() && (
               <button onClick={() => kallSkall("avsluttKiosk")} style={{
@@ -1096,7 +1075,14 @@ export default function App() {
   const [spotifyEnabled, setSpotifyEnabledState] = useState(() => loadSpotifyEnabled());
   const [showOnboarding, setShowOnboarding] = useState(() => !loadOnboarded());
   // Brikke-modus
-  const [brikker, setBrikker]       = useState(() => loadJson(LS_BRIKKER, {}));
+  const [brikker, setBrikkerState] = useState(() => loadJson(LS_BRIKKER, {}));
+  function setBrikker(updater) {
+    setBrikkerState(prev => {
+      const next = typeof updater === "function" ? updater(prev) : updater;
+      saveJson(LS_BRIKKER, next);
+      return next;
+    });
+  }
   const [grense, setGrenseState]    = useState(() => loadJson(LS_GRENSE, "12"));
   const [brikkeMelding, setBrikkeMelding] = useState(null); // { type: "ukjent" | "mangler" | "klar", uid }
   const [sperret, setSperret]       = useState(false); // nettleseren blokkerte autoplay (f.eks. ?kort= på iPhone)
@@ -1332,30 +1318,6 @@ export default function App() {
   activeItemRef.current = activeItem;
 
   // ── Brikke-modus ──────────────────────────────────────────────────
-  // Hent brikkelisten (kobling brikke → episode/serie). Lagres lokalt så det virker uten nett.
-  function hentBrikker() {
-    return fetch("/api/episodes?liste=brikker", { cache: "no-store" })
-      .then(r => r.ok ? r.json() : null)
-      .then(d => {
-        if (!d?.brikker) return null;
-        saveJson(LS_BRIKKER, d.brikker);
-        setBrikker(d.brikker);
-        return d.brikker;
-      })
-      .catch(() => null);
-  }
-  useEffect(() => { hentBrikker(); }, []);
-
-  // Mens barnet ser «Ny brikke», sjekk jevnlig om en voksen har koblet den i admin
-  useEffect(() => {
-    if (brikkeMelding?.type !== "ukjent") return;
-    const t = setInterval(async () => {
-      const b = (await hentBrikker())?.[brikkeMelding.uid];
-      if (b?.type) setBrikkeMelding({ type: "klar", uid: brikkeMelding.uid });
-    }, 8000);
-    return () => clearInterval(t);
-  }, [brikkeMelding]);
-
   function spillVidere(fraStart) {
     const audio = audioRef.current;
     if (!audio) return;
@@ -1372,20 +1334,16 @@ export default function App() {
     setPlaying(false);
   }
 
-  async function brikkeLagtPaa(uid) {
+  function brikkeLagtPaa(uid) {
     // Onboarding og foreldrepanel håndterer brikker selv / ignorerer dem
     if (showOnboarding || showPinModal || showParentPanel || mode !== "brikke") return;
-    let b = brikker[uid];
+    const b = brikker[uid];
     if (!b?.type) {
-      // Ukjent eller ikke koblet: registrer, sjekk om den er koblet siden sist, ellers vis «Ny brikke»
-      if (!b) fetch("/api/episodes?liste=brikker", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ registrer: uid }) }).catch(() => {});
-      const fersk = (await hentBrikker())?.[uid];
-      if (!fersk?.type) {
-        if (playing) brikkePause();
-        setBrikkeMelding({ type: "ukjent", uid });
-        return;
-      }
-      b = fersk;
+      // Ukjent eller ikke koblet: husk den som «ny» (vises i foreldrepanelet) og vis «Ny brikke»
+      if (!b) setBrikker(prev => ({ ...prev, [uid]: { navn: "", type: null, id: null, ny: true } }));
+      if (playing) brikkePause();
+      setBrikkeMelding({ type: "ukjent", uid });
+      return;
     }
     const valg = tolkBrikke(b, tilgjengeligeSections, grense);
     if (!valg) { if (playing) brikkePause(); setBrikkeMelding({ type: "mangler", uid }); return; }
@@ -1710,9 +1668,13 @@ export default function App() {
           miniplusSerier={miniplusSerier} setMiniplusSerier={setMiniplusSerier}
           miniplusStil={miniplusStil} setMiniplusStil={setMiniplusStil}
           spotifyEnabled={spotifyEnabled} setSpotifyEnabled={setSpotifyEnabled}
-          brikker={brikker} grense={grense} setGrense={setGrense}
+          brikker={brikker} setBrikker={setBrikker} grense={grense} setGrense={setGrense}
           onTestBrikke={(uid) => { setShowParentPanel(false); setTimeout(() => sendBrikke(uid), 80); }}
-          onClose={() => { setShowParentPanel(false); if (mode === "brikke") hentBrikker(); }}
+          onClose={() => {
+            setShowParentPanel(false);
+            // Ble «Ny brikke» koblet i panelet? Da er den klar til å legges på igjen.
+            if (brikkeMelding?.type === "ukjent" && brikker[brikkeMelding.uid]?.type) setBrikkeMelding({ type: "klar", uid: brikkeMelding.uid });
+          }}
         />
       )}
 
