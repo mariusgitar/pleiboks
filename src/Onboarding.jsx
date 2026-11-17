@@ -1,4 +1,5 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { erISkall, kallSkall, lyttPaaBrikker } from "./skall.js";
 
 // ── Foreldre-onboarding ────────────────────────────────────────────
 // Vises kun ved første åpning (styrt av pb_onboarded i localStorage,
@@ -336,8 +337,163 @@ function Screen6Done({ spotifyEnabled }) {
   );
 }
 
+// ── Onboarding inne i Android-skallet (Pleiboks-boksen) ─────────────
+// Skallet er installert som app, så «legg på hjemskjermen» og «fest app»
+// trengs ikke. I stedet ber knappene skallet om NFC og låsing, og vi
+// avslutter med å teste en ekte brikke. Spotify er på vent og hoppes over.
+function Knapp({ onClick, disabled, children, sekundaer }) {
+  return (
+    <button onClick={onClick} disabled={disabled} style={{
+      width: "100%", minHeight: 52, borderRadius: 16, fontWeight: 900, fontSize: 15, cursor: disabled ? "default" : "pointer", fontFamily: "inherit",
+      background: sekundaer ? "#fff" : disabled ? "#B8C4C9" : ACCENT,
+      color: sekundaer ? "#999" : "#fff", border: "none", marginTop: sekundaer ? 4 : 0,
+    }}>{children}</button>
+  );
+}
+
+function SkallOnboarding({ onDone }) {
+  const [steg, setSteg] = useState(0);
+  const [nfcPaa, setNfcPaa] = useState(() => kallSkall("nfcPaa") === true);
+  const [test, setTest] = useState(null); // { emoji, tekst }
+
+  // Når forelderen kommer tilbake fra NFC-innstillingene: sjekk på nytt
+  useEffect(() => {
+    if (steg !== 1) return;
+    const sjekk = () => setNfcPaa(kallSkall("nfcPaa") === true);
+    document.addEventListener("visibilitychange", sjekk);
+    window.addEventListener("focus", sjekk);
+    return () => { document.removeEventListener("visibilitychange", sjekk); window.removeEventListener("focus", sjekk); };
+  }, [steg]);
+
+  // Brikketest: lytt på brikker bare på dette steget
+  useEffect(() => {
+    if (steg !== 4) return;
+    return lyttPaaBrikker(async (uid) => {
+      setTest({ emoji: "⏳", tekst: "Leser brikken …" });
+      try {
+        const d = await fetch("/api/brikker", { cache: "no-store" }).then(r => r.json());
+        const b = d?.brikker?.[uid];
+        if (!b) {
+          await fetch("/api/brikker", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ registrer: uid }) });
+          setTest({ emoji: "✅", tekst: "NFC virker! Brikken er ny, og dukker opp i admin så du kan koble den." });
+        } else {
+          setTest({ emoji: "✅", tekst: `NFC virker! Fant «${b.navn || uid}».` });
+        }
+      } catch {
+        setTest({ emoji: "✅", tekst: "NFC virker! (Fikk ikke sjekket brikken mot admin – mangler nett?)" });
+      }
+    });
+  }, [steg]);
+
+  const neste = () => setSteg(s => s + 1);
+  const kicker = (n) => (
+    <div style={{ fontSize: 12, fontWeight: 800, color: "#C49A12", textTransform: "uppercase", letterSpacing: 1.5, marginBottom: 4 }}>Steg {n} av 4</div>
+  );
+  const tittel = (t) => <h2 style={{ fontSize: 19, fontWeight: 900, color: "#1a1a1a", margin: "0 0 6px" }}>{t}</h2>;
+  const tekst = (t) => <p style={{ fontSize: 13.5, fontWeight: 600, color: "#666", margin: "0 0 18px", lineHeight: 1.55 }}>{t}</p>;
+
+  let innhold;
+  if (steg === 0) {
+    innhold = (
+      <div style={{ padding: "48px 28px 32px", textAlign: "center" }}>
+        <div style={{ fontSize: 56, marginBottom: 16 }}>🎧</div>
+        <h1 style={{ fontSize: 24, fontWeight: 900, color: "#1a1a1a", margin: "0 0 10px" }}>Velkommen til Pleiboksen</h1>
+        <p style={{ fontSize: 14, fontWeight: 600, color: "#666", lineHeight: 1.6, margin: "0 0 32px" }}>
+          Denne telefonen blir en lydboks. Barnet legger på en brikke, og lyden starter – uten reklame og uten algoritmer.
+        </p>
+        <Knapp onClick={neste}>Sett opp Pleiboksen →</Knapp>
+      </div>
+    );
+  } else if (steg === 1) {
+    innhold = (
+      <div style={{ padding: "28px 28px 32px" }}>
+        {kicker(1)}{tittel("📶 Slå på NFC")}
+        {tekst("Pleiboksen leser brikkene med NFC. Du sendes til innstillingene og kommer rett tilbake hit.")}
+        {nfcPaa
+          ? <div style={{ background: "#E8F5EE", borderRadius: 14, padding: "12px 14px", fontWeight: 800, fontSize: 14, color: "#2D6B4A", marginBottom: 14 }}>✅ NFC er på</div>
+          : <div style={{ marginBottom: 10 }}><Knapp onClick={() => kallSkall("aapneNfcInnstillinger")}>Åpne NFC-innstillinger</Knapp></div>}
+        <Knapp onClick={neste} sekundaer={!nfcPaa}>{nfcPaa ? "Neste →" : "Hopp over"}</Knapp>
+      </div>
+    );
+  } else if (steg === 2) {
+    innhold = (
+      <div style={{ padding: "28px 28px 32px" }}>
+        {kicker(2)}{tittel("🔒 Lås til Pleiboksen")}
+        {tekst("Telefonen starter rett i Pleiboksen, og barnet kommer ikke ut. Du låser opp med sola i foreldrepanelet.")}
+        <Knapp onClick={() => { kallSkall("laas"); neste(); }}>Lås telefonen</Knapp>
+        <Knapp onClick={neste} sekundaer>Ikke nå</Knapp>
+      </div>
+    );
+  } else if (steg === 3) {
+    innhold = (
+      <div style={{ padding: "28px 28px 32px" }}>
+        {kicker(3)}{tittel("☀️ Foreldretilgang")}
+        {tekst("Det skjulte panelet er der du velger modus, tester brikker og avslutter kiosk. Barnet ser det aldri.")}
+        <div style={{ background: "#FFF8E8", borderRadius: 16, padding: "12px 14px", marginBottom: 10 }}>
+          <div style={{ fontWeight: 900, fontSize: 13.5, color: "#8a6d1a", marginBottom: 4 }}>Slik åpner du panelet</div>
+          <div style={{ fontSize: 13, fontWeight: 600, color: "#7a6020", lineHeight: 1.5 }}>Trykk 5 ganger raskt på sola øverst. Du blir bedt om PIN-koden.</div>
+        </div>
+        <div style={{ border: "2px solid #eee", borderRadius: 16, padding: "12px 14px", marginBottom: 18, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+          <span style={{ fontWeight: 900, fontSize: 13.5 }}>🔑 PIN-kode</span>
+          <span style={{ fontSize: 20, fontWeight: 900, color: ACCENT, letterSpacing: 4 }}>1234</span>
+        </div>
+        <Knapp onClick={neste}>Neste →</Knapp>
+      </div>
+    );
+  } else if (steg === 4) {
+    innhold = (
+      <div style={{ padding: "28px 28px 32px" }}>
+        {kicker(4)}{tittel("🧩 Test en brikke")}
+        {tekst("Legg en brikke på baksiden av telefonen, midt på.")}
+        <div style={{ borderRadius: 18, padding: 16, marginBottom: 18, display: "flex", flexDirection: "column", alignItems: "center", gap: 8, textAlign: "center", background: test ? "#E8F5EE" : "#F3F7F9" }}>
+          <span style={{ fontSize: 40 }}>{test ? test.emoji : "📲"}</span>
+          <span style={{ fontSize: 15, fontWeight: 800, color: "#1B2B33" }}>{test ? test.tekst : "Venter på en brikke …"}</span>
+        </div>
+        <Knapp onClick={neste} disabled={!test || test.emoji === "⏳"}>Neste →</Knapp>
+        {!test && <Knapp onClick={neste} sekundaer>Hopp over</Knapp>}
+      </div>
+    );
+  } else {
+    innhold = (
+      <div style={{ padding: "60px 28px 32px", textAlign: "center" }}>
+        <div style={{ fontSize: 56, marginBottom: 16 }}>🎉</div>
+        <h2 style={{ fontSize: 22, fontWeight: 900, color: "#1a1a1a", margin: "0 0 10px" }}>Klar for barnet ditt!</h2>
+        <p style={{ fontSize: 14, fontWeight: 600, color: "#666", lineHeight: 1.6, margin: "0 0 28px" }}>
+          Pleiboksen starter i Brikke-modus. Du kan endre alt senere: trykk 5 ganger på sola.
+        </p>
+        <Knapp onClick={() => onDone(false, { mode: "brikke" })}>Åpne Pleiboksen 🎧</Knapp>
+      </div>
+    );
+  }
+
+  return (
+    <div style={{
+      position: "fixed", inset: 0, zIndex: 500,
+      background: "linear-gradient(180deg,#AEE4FF 0%,#C8F0FF 45%,#DAFFC8 100%)",
+      fontFamily: "'Nunito', system-ui, sans-serif", display: "flex",
+      alignItems: "center", justifyContent: "center", padding: "20px 16px", overflowY: "auto",
+    }}>
+      <div style={{ width: "100%", maxWidth: 420, background: "#fff", borderRadius: 28, overflow: "hidden", boxShadow: "0 20px 60px rgba(0,0,0,0.18)" }}>
+        {steg >= 1 && steg <= 4 && (
+          <div style={{ display: "flex", gap: 6, padding: "20px 28px 0" }}>
+            {[1, 2, 3, 4].map(i => (
+              <div key={i} style={{ flex: 1, height: 4, borderRadius: 2, background: i <= steg ? ACCENT : "#eee" }} />
+            ))}
+          </div>
+        )}
+        {innhold}
+      </div>
+    </div>
+  );
+}
+
 // ── Hovedkomponent ──────────────────────────────────────────────────
-export default function Onboarding({ onDone, initialSpotifyConnected = false }) {
+export default function Onboarding(props) {
+  if (erISkall()) return <SkallOnboarding onDone={props.onDone} />;
+  return <NettleserOnboarding {...props} />;
+}
+
+function NettleserOnboarding({ onDone, initialSpotifyConnected = false }) {
   // Hvis brukeren akkurat kom tilbake fra Spotify OAuth (App.jsx sender
   // initialSpotifyConnected=true når den ser ?spotify=connected i URL),
   // hopp rett til siste skjerm med riktig status.

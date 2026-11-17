@@ -106,6 +106,18 @@
       <div class="msg" id="addMsg"></div>
     </div>
 
+    <!-- Brikker (NFC) -->
+    <div class="card" id="brikkeCard">
+      <h2>🧩 Brikker</h2>
+      <p class="muted" style="margin:0 0 6px">Nye brikker dukker opp her når barnet legger dem på boksen. Velg hva hver brikke skal spille. Serie = fortsetter der barnet slapp, og går videre til neste episode når en er ferdig.</p>
+      <div id="brikkeListe"></div>
+      <div style="margin-top:12px; display:flex; gap:8px">
+        <button class="ghost" id="brikkeHent">Oppdater</button>
+        <button class="primary" id="brikkeLagre" disabled>Lagre brikker</button>
+      </div>
+      <div class="msg" id="brikkeMsg"></div>
+    </div>
+
     <p class="muted" id="info"></p>
     <div id="list"></div>
   </div>
@@ -140,6 +152,7 @@ async function loggInn(pw) {
     passord = pw; sessionStorage.setItem("pb_admin_pw", pw);
     $("loginCard").classList.add("hidden"); $("app").classList.remove("hidden");
     await hentListe();
+    await hentBrikker();
   } catch (e) { $("loginMsg").textContent = e.message; }
 }
 $("loginBtn").onclick = () => loggInn($("pw").value);
@@ -406,6 +419,66 @@ $("list").addEventListener("change", e => {
   if (el.dataset.a === "emoji") it.emoji = el.value.trim();
   settUlagret(true);
 });
+
+// ── Brikker ───────────────────────────────────────────────
+let brikker = {};
+async function hentBrikker() {
+  try {
+    const d = await fetch("/api/brikker", { cache: "no-store" }).then(r => r.json());
+    brikker = d.brikker || {};
+    brikkeMelding("");
+  } catch (e) { brikkeMelding("Kunne ikke hente brikker: " + e.message, "err"); }
+  $("brikkeLagre").disabled = true;
+  tegnBrikker();
+}
+function brikkeMelding(t, cls = "") { $("brikkeMsg").textContent = t; $("brikkeMsg").className = "msg " + cls; }
+function brikkeValg(b) {
+  const serier = sections.map(s => `<option value="serie|${esc(s.id)}" ${b.type === "serie" && b.id === s.id ? "selected" : ""}>${esc(s.icon || "")} ${esc(s.label)} – hele serien</option>`).join("");
+  const episoder = sections.map(s => `<optgroup label="${esc(s.label)}">` + s.items.map(i =>
+    `<option value="episode|${esc(i.id)}" ${b.type === "episode" && b.id === i.id ? "selected" : ""}>${esc(i.emoji || "")} ${esc(i.title)}</option>`).join("") + "</optgroup>").join("");
+  return `<option value="">Ikke koblet</option><optgroup label="Serier">${serier}</optgroup>${episoder}`;
+}
+function tegnBrikker() {
+  const uider = Object.keys(brikker).sort((a, b) => (brikker[b].ny ? 1 : 0) - (brikker[a].ny ? 1 : 0));
+  $("brikkeListe").innerHTML = uider.length ? uider.map(uid => {
+    const b = brikker[uid];
+    return `<div style="border-top:1px solid #f0f0f0; padding:10px 0">
+      <div style="display:flex; align-items:center; gap:8px">
+        <input value="${esc(b.navn || "")}" data-u="${esc(uid)}" data-f="navn" placeholder="Navn, f.eks. Dinokort" style="flex:1">
+        ${b.ny ? '<span class="tag">Ny</span>' : ""}
+        <button class="danger" data-u="${esc(uid)}" data-f="slett" title="Glem brikken">🗑️</button>
+      </div>
+      <div class="muted" style="margin:4px 0">ID ${esc(uid)}</div>
+      <select data-u="${esc(uid)}" data-f="innhold">${brikkeValg(b)}</select>
+    </div>`;
+  }).join("") : '<p class="muted">Ingen brikker ennå. Legg en brikke på boksen, og trykk Oppdater.</p>';
+}
+function brikkeEndret() { $("brikkeLagre").disabled = false; brikkeMelding("Ulagrede endringer på brikker"); }
+$("brikkeListe").addEventListener("change", e => {
+  const el = e.target, b = brikker[el.dataset.u]; if (!b) return;
+  if (el.dataset.f === "navn") b.navn = el.value.trim();
+  if (el.dataset.f === "innhold") {
+    const [type, id] = el.value ? el.value.split("|") : [null, null];
+    b.type = type; b.id = id;
+    if (type) b.ny = false;
+  }
+  brikkeEndret();
+});
+$("brikkeListe").addEventListener("click", e => {
+  const el = e.target.closest("button[data-f=slett]"); if (!el) return;
+  const uid = el.dataset.u;
+  if (!confirm(`Glemme brikken «${brikker[uid]?.navn || uid}»? Den dukker opp som ny igjen hvis den legges på.`)) return;
+  delete brikker[uid]; tegnBrikker(); brikkeEndret();
+});
+$("brikkeHent").onclick = hentBrikker;
+$("brikkeLagre").onclick = async () => {
+  $("brikkeLagre").disabled = true; brikkeMelding("Lagrer …");
+  const r = await fetch("/api/brikker", { method: "POST", headers: { "Content-Type": "application/json", "x-admin-passord": passord }, body: JSON.stringify({ brikker }) });
+  const d = await r.json().catch(() => ({}));
+  if (!r.ok) { brikkeMelding("Feil: " + (d.error || r.status), "err"); $("brikkeLagre").disabled = false; return; }
+  brikkeMelding("✓ Brikker lagret. Boksen henter dem neste gang en brikke legges på.", "ok");
+  tegnBrikker();
+};
 </script>
 </body>
 </html>
