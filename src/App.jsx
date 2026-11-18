@@ -1087,6 +1087,8 @@ export default function App() {
   const [brikkeMelding, setBrikkeMelding] = useState(null); // { type: "ukjent" | "mangler" | "klar", uid }
   const [sperret, setSperret]       = useState(false); // nettleseren blokkerte autoplay (f.eks. ?kort= på iPhone)
   const [ferdig, setFerdig]         = useState(false); // episoden spilte til slutt
+  const [merkePop, setMerkePop]     = useState(null);  // { emoji, n } — brikkens merke spretter frem
+  const [spillerMerke, setSpillerMerke] = useState(""); // merket til brikken som startet det som spilles
   function setGrense(g) { setGrenseState(g); saveJson(LS_GRENSE, g); }
   const [showPinModal, setShowPinModal]     = useState(false);
   const [showParentPanel, setShowParentPanel] = useState(false);
@@ -1348,6 +1350,8 @@ export default function App() {
     const valg = tolkBrikke(b, tilgjengeligeSections, grense);
     if (!valg) { if (playing) brikkePause(); setBrikkeMelding({ type: "mangler", uid }); return; }
     setBrikkeMelding(null);
+    if (b.emoji) setMerkePop({ emoji: b.emoji, n: Date.now() });
+    setSpillerMerke(b.emoji || "");
     if (valg.section && b.type === "serie") huskSerie(valg.section, valg.item);
 
     if (source === "nrk" && activeItem?.id === valg.item.id) {
@@ -1602,13 +1606,14 @@ export default function App() {
   if (mode === "brikke") {
     if (brikkeMelding?.type === "klar") {
       const v = tolkBrikke(brikker[brikkeMelding.uid], tilgjengeligeSections, grense);
-      brikkeVisning = v ? { tilstand: "klar", item: v.item, section: v.section, cover: nrkCovers[v.item.id] } : { tilstand: "mangler" };
+      brikkeVisning = v ? { tilstand: "klar", item: v.item, section: v.section, cover: nrkCovers[v.item.id], merke: brikker[brikkeMelding.uid]?.emoji } : { tilstand: "mangler" };
     } else if (brikkeMelding) {
       brikkeVisning = { tilstand: brikkeMelding.type };
     } else if (source === "nrk" && activeItem && activeSection) {
       brikkeVisning = {
         tilstand: loading ? "laster" : playing ? "spiller" : ferdig ? "ferdig" : "pause",
         item: activeItem, section: activeSection, cover: activeItem.cover || nrkCovers[activeItem.id],
+        merke: spillerMerke,
       };
     }
   }
@@ -1687,6 +1692,7 @@ export default function App() {
         // ── Brikke-modus: bare «legg brikken her» og det som spilles ──
         <BrikkeSkjerm
           {...brikkeVisning}
+          pop={merkePop}
           progress={progress} duration={duration} sperret={sperret}
           onPause={brikkePause}
           onFraStart={() => spillVidere(true)}
