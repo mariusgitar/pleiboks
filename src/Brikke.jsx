@@ -71,72 +71,216 @@ export function huskSerie(section, item) {
 }
 
 // ── Koble brikker (i foreldrepanelet) ────────────────────────────
-// Mens panelet er åpent: legg en brikke på telefonen, så dukker den opp her
-// (ny eller kjent) og kan kobles til en serie eller episode.
+// Liste over brikkene + en veiviser: legg på brikken → velg innhold → velg merke → prøv den.
+// Mens panelet er åpent kan man også bare legge en brikke på telefonen for å endre den.
+const MERKER = ["🦖","🦕","🐯","🐨","🦁","🦒","🐶","🐱","🐘","🐻","🐸","🐰","🦊","🐼","🐧","🐙","🦋","🐞","🐳","🦄","🌙","⭐","☀️","🌈","🚒","🚗","🚂","🚀","⚽","🎵","🎤","🧸"];
+
+function innholdFor(b, sections) {
+  if (!b?.type) return null;
+  if (b.type === "serie") {
+    const s = sections.find((x) => x.id === b.id);
+    return s ? { tittel: s.label, under: "Hele serien", ikon: s.icon, farge: s.color } : null;
+  }
+  for (const s of sections) {
+    const i = s.items.find((x) => x.id === b.id);
+    if (i) return { tittel: i.title, under: s.label, ikon: i.emoji, farge: s.color };
+  }
+  return null;
+}
+
+const KNAPP = { minHeight:48, borderRadius:14, border:"none", fontWeight:900, fontSize:15, cursor:"pointer", fontFamily:"inherit", padding:"0 18px" };
+const PRIMAER = { ...KNAPP, background:"#1B4D5C", color:"#fff" };
+const SEKUNDAER = { ...KNAPP, background:"#EEF2F3", color:"#1B4D5C" };
+
 export function BrikkeOppsett({ sections, brikker, setBrikker, onTest }) {
-  const [sist, setSist] = useState(null); // uid som nettopp ble lagt på
+  // veiviser: null (liste) eller { steg: "legg"|"innhold"|"merke"|"prov"|"ferdig", uid, ny, utkast, aapen }
+  const [v, setV] = useState(null);
+  const vRef = useRef(v); vRef.current = v;
+  const bRef = useRef(brikker); bRef.current = brikker;
+
+  function aapne(uid) {
+    const b = bRef.current[uid];
+    if (!b) setBrikker((prev) => ({ ...prev, [uid]: { navn: "", type: null, id: null, emoji: "", ny: true } }));
+    setV({ steg: "innhold", uid, ny: !b?.type, utkast: { type: b?.type || null, id: b?.id || null, emoji: b?.emoji || "", navn: b?.navn || "" }, aapen: null });
+  }
 
   useEffect(() => lyttPaaBrikker((uid) => {
-    setBrikker((prev) => prev[uid] ? prev : { ...prev, [uid]: { navn: "", type: null, id: null, ny: true } });
-    setSist(uid);
+    const cur = vRef.current;
+    if (!cur || cur.steg === "legg") aapne(uid);
+    else if (cur.steg === "prov" && uid === cur.uid) setV({ ...cur, steg: "ferdig" });
   }), []);
 
-  function endre(uid, felt) {
-    setBrikker((prev) => ({ ...prev, [uid]: { ...prev[uid], ...felt } }));
+  function lagre() {
+    const u = v.utkast;
+    const navn = u.navn.trim() || innholdFor(u, sections)?.tittel || "";
+    setBrikker((prev) => ({ ...prev, [v.uid]: { ...prev[v.uid], type: u.type, id: u.id, emoji: u.emoji, navn, ny: false } }));
+    setV({ ...v, steg: "prov", utkast: { ...u, navn } });
   }
-  function glem(uid) {
-    if (!confirm(`Glemme «${brikker[uid]?.navn || "brikken"}»? Den blir ny igjen hvis den legges på.`)) return;
-    setBrikker((prev) => { const n = { ...prev }; delete n[uid]; return n; });
+  function glem() {
+    if (!confirm("Glemme brikken? Den blir ny igjen hvis den legges på.")) return;
+    setBrikker((prev) => { const n = { ...prev }; delete n[v.uid]; return n; });
+    setV(null);
   }
+  const utkast = (felt) => setV((cur) => ({ ...cur, utkast: { ...cur.utkast, ...felt } }));
 
-  const uider = Object.keys(brikker).sort((a, b) => (a === sist ? -1 : b === sist ? 1 : (brikker[b].ny ? 1 : 0) - (brikker[a].ny ? 1 : 0)));
-  const felt = { width:"100%", padding:"10px 12px", fontSize:15, border:"1.5px solid #d6dde0", borderRadius:10, background:"#fff", fontFamily:"inherit", fontWeight:700, color:"#1a1a1a" };
+  const uider = Object.keys(brikker).sort((a, b) => (brikker[a].type ? 1 : 0) - (brikker[b].type ? 1 : 0));
 
   return (
     <div style={{ marginBottom:20, padding:"14px 16px", background:"#fff", borderRadius:16, border:"2px solid #eee" }}>
-      <div style={{ fontWeight:900, fontSize:15, color:"#1a1a1a", marginBottom:4 }}>🧩 Brikker</div>
-      <div style={{ background:"#E3F2F9", borderRadius:12, padding:"10px 12px", fontSize:13, fontWeight:800, color:"#1B4D5C", marginBottom:10 }}>
-        📲 Legg en brikke på telefonen for å koble den.
-      </div>
+      <div style={{ fontWeight:900, fontSize:15, color:"#1a1a1a", marginBottom:10 }}>🧩 Brikker</div>
+      <button onClick={() => setV({ steg: "legg" })} style={{ ...PRIMAER, width:"100%", marginBottom:8 }}>➕ Legg til ny brikke</button>
+      <div style={{ fontSize:11.5, color:"#888", fontWeight:700, marginBottom:10 }}>Du kan også legge en brikke på telefonen for å endre den.</div>
+
       {uider.length === 0 && <div style={{ fontSize:13, color:"#888", fontWeight:700 }}>Ingen brikker ennå.</div>}
       {uider.map((uid) => {
-        const b = brikker[uid];
-        const verdi = b.type ? `${b.type}|${b.id}` : "";
+        const b = brikker[uid], inn = innholdFor(b, sections);
         return (
-          <div key={uid} style={{ padding:"12px 0", borderTop:"1px solid #f2f2f2", ...(uid === sist ? { background:"#FFF8E8", margin:"0 -16px", padding:"12px 16px" } : {}) }}>
-            <div style={{ display:"flex", gap:8, alignItems:"center", marginBottom:8 }}>
-              <input value={b.navn || ""} placeholder="Navn, f.eks. Dinokort" onChange={(e) => endre(uid, { navn: e.target.value })} style={{ ...felt, flex:1 }} />
-              {b.ny && !b.type && <span style={{ fontSize:11, fontWeight:800, background:"#FFF3DC", color:"#B85A00", borderRadius:6, padding:"2px 7px" }}>Ny</span>}
+          <div key={uid} style={{ display:"flex", alignItems:"center", gap:12, padding:"10px 0", borderTop:"1px solid #f2f2f2" }}>
+            <div style={{ width:44, height:44, borderRadius:12, flexShrink:0, background: inn?.farge || "#F3F5F6", display:"flex", alignItems:"center", justifyContent:"center", fontSize:24 }}>{b.emoji || inn?.ikon || "🧩"}</div>
+            <div style={{ flex:1, minWidth:0 }}>
+              <div style={{ fontWeight:900, fontSize:14, color:"#1a1a1a" }}>{b.navn || (b.type ? inn?.tittel : "Ny brikke")}</div>
+              <div style={{ fontSize:12, fontWeight:700, color: b.type ? "#888" : "#B85A00", whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis" }}>
+                {b.type ? `${inn?.tittel || "?"} · ${inn?.under || ""}` : "Ikke satt opp – barnet har prøvd den"}
+              </div>
             </div>
-            <select value={verdi} onChange={(e) => {
-              const [type, id] = e.target.value ? e.target.value.split("|") : [null, null];
-              endre(uid, { type, id, ny: type ? false : b.ny });
-            }} style={felt}>
-              <option value="">Ikke koblet</option>
-              <optgroup label="Hele serien (fortsetter der barnet slapp)">
-                {sections.map((s) => <option key={s.id} value={`serie|${s.id}`}>{s.icon} {s.label}</option>)}
-              </optgroup>
-              {sections.map((s) => (
-                <optgroup key={s.id} label={s.label}>
-                  {s.items.map((i) => <option key={i.id} value={`episode|${i.id}`}>{i.emoji} {i.title}</option>)}
-                </optgroup>
-              ))}
-            </select>
-            <div style={{ display:"flex", gap:8, marginTop:8 }}>
-              <button disabled={!b.type} onClick={() => onTest(uid)} style={{ flex:1, padding:"9px", borderRadius:10, border:"none", background: b.type ? "#E3F2F9" : "#f2f2f2", color: b.type ? "#1B4D5C" : "#aaa", fontWeight:800, fontSize:13, cursor: b.type ? "pointer" : "default", fontFamily:"inherit" }}>▶ Test</button>
-              <button onClick={() => glem(uid)} style={{ padding:"9px 14px", borderRadius:10, border:"none", background:"#fdecea", color:"#C0392B", fontWeight:800, fontSize:13, cursor:"pointer", fontFamily:"inherit" }}>Glem</button>
-            </div>
+            {b.type && <button onClick={() => onTest(uid)} aria-label="Spill av" style={{ ...SEKUNDAER, minHeight:40, padding:"0 12px" }}>▶</button>}
+            <button onClick={() => aapne(uid)} style={{ ...(b.type ? SEKUNDAER : PRIMAER), minHeight:40, padding:"0 12px", fontSize:13 }}>{b.type ? "Endre" : "Sett opp"}</button>
           </div>
         );
       })}
+
+      {v && (
+        <div style={{ position:"fixed", inset:0, zIndex:260, background:"#FAF7F4", overflowY:"auto", fontFamily:"'Nunito',system-ui,sans-serif" }}>
+          <div style={{ position:"sticky", top:0, background:"#1B4D5C", padding:"18px 20px 14px", display:"flex", alignItems:"center", justifyContent:"space-between", zIndex:1 }}>
+            <div>
+              <div style={{ color:"#F5C842", fontSize:11, fontWeight:800, letterSpacing:2, textTransform:"uppercase" }}>{v.ny === false ? "Endre brikke" : "Ny brikke"}</div>
+              <div style={{ color:"#fff", fontSize:19, fontWeight:900 }}>
+                {{ legg:"Legg på brikken", innhold:"Hva skal den spille?", merke:"Velg et merke", prov:"Prøv den", ferdig:"Ferdig!" }[v.steg]}
+              </div>
+            </div>
+            <button onClick={() => setV(null)} aria-label="Lukk" style={{ width:40, height:40, borderRadius:"50%", background:"rgba(255,255,255,0.15)", border:"none", color:"#fff", fontSize:18, cursor:"pointer" }}>✕</button>
+          </div>
+
+          <div style={{ padding:"20px 20px 40px", maxWidth:560, margin:"0 auto" }}>
+            {v.steg === "legg" && (
+              <div style={{ display:"flex", flexDirection:"column", alignItems:"center", gap:20, paddingTop:30, textAlign:"center" }}>
+                <div style={{ position:"relative", width:170, height:170 }}>
+                  <div style={{ position:"absolute", inset:0, borderRadius:"50%", border:"4px solid #AEE4FF", animation:"pbPulse 2.6s ease-out infinite" }} />
+                  <div style={{ position:"absolute", inset:0, borderRadius:"50%", background:"#E3F2F9", border:"4px dashed #1B6B8A", display:"flex", alignItems:"center", justifyContent:"center", fontSize:64 }}>📲</div>
+                </div>
+                <div style={{ fontSize:16, fontWeight:800, color:"#1B4D5C", maxWidth:280 }}>Legg brikken på baksiden av telefonen, midt på.</div>
+                <style>{`@keyframes pbPulse { 0%{transform:scale(1);opacity:.6} 70%{transform:scale(1.16);opacity:0} 100%{transform:scale(1.16);opacity:0} }`}</style>
+              </div>
+            )}
+
+            {v.steg === "innhold" && (
+              <>
+                {sections.map((s) => {
+                  const serieValgt = v.utkast.type === "serie" && v.utkast.id === s.id;
+                  const epValgt = v.utkast.type === "episode" && s.items.some((i) => i.id === v.utkast.id);
+                  const aapen = v.aapen === s.id || epValgt;
+                  return (
+                    <div key={s.id} style={{ background:"#fff", borderRadius:16, marginBottom:10, overflow:"hidden", border: serieValgt || epValgt ? `2.5px solid ${s.accent}` : "2px solid #eee" }}>
+                      <button onClick={() => utkast({ type: "serie", id: s.id })} style={{ display:"flex", alignItems:"center", gap:12, width:"100%", padding:"12px 14px", background: serieValgt ? s.color : "#fff", border:"none", cursor:"pointer", textAlign:"left", fontFamily:"inherit" }}>
+                        <div style={{ width:38, height:38, borderRadius:11, background:s.accent, display:"flex", alignItems:"center", justifyContent:"center", fontSize:20, flexShrink:0 }}>{s.icon}</div>
+                        <div style={{ flex:1 }}>
+                          <div style={{ fontWeight:900, fontSize:15, color:"#1a1a1a" }}>{s.label}</div>
+                          <div style={{ fontSize:12, fontWeight:700, color:"#888" }}>Hele serien · fortsetter der barnet slapp</div>
+                        </div>
+                        {serieValgt && <span style={{ fontSize:20, color:s.accent, fontWeight:900 }}>✓</span>}
+                      </button>
+                      <button onClick={() => setV((cur) => ({ ...cur, aapen: aapen ? null : s.id }))} style={{ width:"100%", padding:"8px 14px", border:"none", borderTop:"1px solid #f2f2f2", background:"#fff", textAlign:"left", fontSize:13, fontWeight:800, color:s.accent, cursor:"pointer", fontFamily:"inherit" }}>
+                        {aapen ? "Skjul episoder ▴" : `Velg én episode (${s.items.length}) ▾`}
+                      </button>
+                      {aapen && s.items.map((i) => {
+                        const valgt = v.utkast.type === "episode" && v.utkast.id === i.id;
+                        return (
+                          <button key={i.id} onClick={() => utkast({ type: "episode", id: i.id })} style={{ display:"flex", alignItems:"center", gap:10, width:"100%", padding:"10px 14px", border:"none", borderTop:"1px solid #f6f6f6", background: valgt ? s.color : "#fff", textAlign:"left", cursor:"pointer", fontFamily:"inherit" }}>
+                            <span style={{ fontSize:20, width:28, textAlign:"center" }}>{i.emoji}</span>
+                            <span style={{ flex:1, fontSize:14, fontWeight:800, color:"#1a1a1a" }}>{i.title}</span>
+                            {valgt && <span style={{ color:s.accent, fontWeight:900 }}>✓</span>}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  );
+                })}
+                <div style={{ position:"sticky", bottom:0, paddingTop:10, background:"linear-gradient(180deg, rgba(250,247,244,0), #FAF7F4 30%)", display:"flex", gap:8 }}>
+                  {v.ny === false && <button onClick={glem} style={{ ...KNAPP, background:"#fdecea", color:"#C0392B" }}>Glem</button>}
+                  <button disabled={!v.utkast.type} onClick={() => setV({ ...v, steg: "merke" })} style={{ ...PRIMAER, flex:1, opacity: v.utkast.type ? 1 : 0.4 }}>Neste →</button>
+                </div>
+              </>
+            )}
+
+            {v.steg === "merke" && (
+              <>
+                <div style={{ fontSize:13, fontWeight:700, color:"#666", marginBottom:12, lineHeight:1.5 }}>
+                  Velg samme figur som klistremerket på brikken. Den spretter frem på skjermen når barnet legger brikken på. Har brikken et bilde av innholdet, kan du velge «Ingen».
+                </div>
+                <div style={{ display:"grid", gridTemplateColumns:"repeat(6, minmax(0, 1fr))", gap:8, marginBottom:12 }}>
+                  {MERKER.map((m) => (
+                    <button key={m} onClick={() => utkast({ emoji: m })} aria-label={m} style={{ aspectRatio:"1", borderRadius:12, fontSize:26, cursor:"pointer", background: v.utkast.emoji === m ? "#FFF3DC" : "#fff", border: v.utkast.emoji === m ? "2.5px solid #D4700A" : "2px solid #eee" }}>{m}</button>
+                  ))}
+                </div>
+                <div style={{ display:"flex", gap:8, marginBottom:18 }}>
+                  <button onClick={() => utkast({ emoji: "" })} style={{ ...SEKUNDAER, flex:1, minHeight:44, fontSize:14, border: !v.utkast.emoji ? "2.5px solid #1B4D5C" : "2px solid transparent" }}>Ingen</button>
+                  <input value={MERKER.includes(v.utkast.emoji) ? "" : v.utkast.emoji} onChange={(e) => utkast({ emoji: e.target.value.trim().slice(0, 8) })} placeholder="Annen emoji" style={{ flex:1, minHeight:44, borderRadius:14, border:"2px solid #eee", padding:"0 12px", fontSize:18, fontFamily:"inherit", textAlign:"center" }} />
+                </div>
+                <label style={{ display:"block", fontSize:13, fontWeight:800, color:"#1a1a1a", marginBottom:6 }}>Navn (for deg)</label>
+                <input value={v.utkast.navn} onChange={(e) => utkast({ navn: e.target.value })} placeholder={innholdFor(v.utkast, sections)?.tittel || "f.eks. Dinokuben"} style={{ width:"100%", boxSizing:"border-box", minHeight:46, borderRadius:12, border:"1.5px solid #d6dde0", padding:"0 12px", fontSize:15, fontFamily:"inherit", fontWeight:700, marginBottom:20 }} />
+                <div style={{ display:"flex", gap:8 }}>
+                  <button onClick={() => setV({ ...v, steg: "innhold" })} style={SEKUNDAER}>← Tilbake</button>
+                  <button onClick={lagre} style={{ ...PRIMAER, flex:1 }}>Lagre</button>
+                </div>
+              </>
+            )}
+
+            {(v.steg === "prov" || v.steg === "ferdig") && (() => {
+              const inn = innholdFor(v.utkast, sections);
+              return (
+                <div style={{ display:"flex", flexDirection:"column", alignItems:"center", gap:16, paddingTop:20, textAlign:"center" }}>
+                  <div style={{ width:150, height:150, borderRadius:36, background: inn?.farge || "#F3F5F6", display:"flex", alignItems:"center", justifyContent:"center", fontSize:84 }}>{v.utkast.emoji || inn?.ikon || "🧩"}</div>
+                  <div>
+                    <div style={{ fontSize:20, fontWeight:900, color:"#1a1a1a" }}>{v.utkast.navn}</div>
+                    <div style={{ fontSize:13, fontWeight:700, color:"#888" }}>{inn?.tittel} · {inn?.under}</div>
+                  </div>
+                  {v.steg === "prov" ? (
+                    <>
+                      <div style={{ background:"#E3F2F9", borderRadius:14, padding:"12px 16px", fontWeight:800, fontSize:14, color:"#1B4D5C" }}>📲 Legg brikken på igjen for å sjekke at den leses.</div>
+                      <button onClick={() => setV({ ...v, steg: "ferdig" })} style={{ ...SEKUNDAER, width:"100%" }}>Hopp over</button>
+                    </>
+                  ) : (
+                    <>
+                      <div style={{ background:"#E8F5EE", borderRadius:14, padding:"12px 16px", fontWeight:800, fontSize:14, color:"#2D6B4A" }}>✅ Brikken virker.</div>
+                      <div style={{ display:"flex", gap:8, width:"100%" }}>
+                        <button onClick={() => setV({ steg: "legg" })} style={{ ...SEKUNDAER, flex:1 }}>➕ En til</button>
+                        <button onClick={() => setV(null)} style={{ ...PRIMAER, flex:1 }}>Ferdig</button>
+                      </div>
+                      <button onClick={() => { setV(null); onTest(v.uid); }} style={{ ...SEKUNDAER, width:"100%", background:"none" }}>▶ Spill den nå</button>
+                    </>
+                  )}
+                </div>
+              );
+            })()}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
 
 // ── Barneskjermen ────────────────────────────────────────────────
 // tilstand: "tom" | "ukjent" | "mangler" | "klar" | "laster" | "spiller" | "pause" | "ferdig"
-export function BrikkeSkjerm({ tilstand, item, section, cover, progress, duration, sperret, onPause, onFraStart, onStartSperret }) {
+export function BrikkeSkjerm({ tilstand, item, section, cover, merke, pop, progress, duration, sperret, onPause, onFraStart, onStartSperret }) {
   const [spor, setSpor] = useState([]);
+  const [visPop, setVisPop] = useState(null);
+  // Brikkens merke spretter frem når brikken legges på (pop = { emoji, n }, n endres hver gang)
+  useEffect(() => {
+    if (!pop?.emoji) return;
+    setVisPop(pop);
+    const t = setTimeout(() => setVisPop(null), 1400);
+    return () => clearTimeout(t);
+  }, [pop?.n]);
   const [poff, setPoff] = useState(false);
   const [hold, setHold] = useState(0);
   const [snurr, setSnurr] = useState(false);
@@ -238,6 +382,7 @@ export function BrikkeSkjerm({ tilstand, item, section, cover, progress, duratio
         @keyframes pbPulse { 0%{transform:scale(1);opacity:.6} 70%{transform:scale(1.16);opacity:0} 100%{transform:scale(1.16);opacity:0} }
         @keyframes pbPoff  { 0%{transform:scale(.4);opacity:.95} 100%{transform:scale(1.6);opacity:0} }
         @keyframes pbSnurr { from{transform:rotate(0deg)} to{transform:rotate(-360deg)} }
+        @keyframes pbMerke { 0%{transform:scale(.2);opacity:0} 25%{transform:scale(1.15);opacity:1} 40%{transform:scale(.95)} 55%{transform:scale(1)} 80%{transform:scale(1);opacity:1} 100%{transform:scale(.6) translateY(-40px);opacity:0} }
       `}</style>
 
       {medBilde && (
@@ -268,6 +413,9 @@ export function BrikkeSkjerm({ tilstand, item, section, cover, progress, duratio
                   <span style={{ width:10, height:30, borderRadius:3, background:section.accent }} />
                 </div>
               </div>
+            )}
+            {merke && (
+              <div style={{ position:"absolute", top:-16, left:-16, width:60, height:60, borderRadius:"50%", background:"#fff", boxShadow:"0 4px 14px rgba(0,0,0,0.22)", display:"flex", alignItems:"center", justifyContent:"center", fontSize:34 }}>{merke}</div>
             )}
             {hold > 0 && (
               <div style={{ position:"absolute", inset:0, display:"flex", alignItems:"center", justifyContent:"center" }}>
@@ -323,6 +471,11 @@ export function BrikkeSkjerm({ tilstand, item, section, cover, progress, duratio
       {spor.map((p, i) => (
         <span key={i} style={{ position:"absolute", left:p.x - 8, top:p.y - 8, width:16, height:16, borderRadius:"50%", background:"#F5C842", boxShadow:"0 0 10px rgba(245,200,66,0.8)", opacity:(i + 1) / spor.length, pointerEvents:"none" }} />
       ))}
+      {visPop && (
+        <div key={visPop.n} style={{ position:"absolute", inset:0, display:"flex", alignItems:"center", justifyContent:"center", pointerEvents:"none", zIndex:2 }}>
+          <div style={{ width:220, height:220, borderRadius:"50%", background:"rgba(255,255,255,0.95)", boxShadow:"0 16px 50px rgba(0,0,0,0.25)", display:"flex", alignItems:"center", justifyContent:"center", fontSize:140, animation:"pbMerke 1.4s ease-out forwards" }}>{visPop.emoji}</div>
+        </div>
+      )}
       {poff && (
         <div style={{ position:"absolute", inset:0, display:"flex", alignItems:"center", justifyContent:"center", pointerEvents:"none" }}>
           <div style={{ width:250, height:250, borderRadius:"50%", border:"10px solid #F5C842", animation:"pbPoff 0.8s ease-out forwards" }} />
